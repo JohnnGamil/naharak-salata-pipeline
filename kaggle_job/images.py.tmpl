@@ -1,0 +1,82 @@
+# Runs on a Kaggle T4 GPU. Generated from kaggle_job/images.py.tmpl - do not edit the copy.
+# Text-to-image for the character reference pictures of ONE video (used when Pollinations is down).
+import base64
+import json
+import os
+import subprocess
+import sys
+import time
+import traceback
+
+T0 = time.time()
+JOB = json.loads(base64.b64decode("__JOB_B64__").decode("utf-8"))
+OUT = "/kaggle/working"
+os.makedirs(f"{OUT}/images", exist_ok=True)
+RESULT = {"chars": {}, "log": [], "started": T0}
+
+
+def note(msg):
+    line = f"[{time.time() - T0:7.1f}s] {msg}"
+    print(line, flush=True)
+    RESULT["log"].append(line)
+
+
+def save_result():
+    RESULT["elapsed_s"] = time.time() - T0
+    with open(f"{OUT}/result.json", "w") as f:
+        json.dump(RESULT, f, indent=1)
+
+
+try:
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-U", *JOB["pip"]], check=True)
+    note("pip done")
+
+    import torch
+    from diffusers import DiffusionPipeline
+
+    os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
+    pipe, used = None, None
+    for model in JOB["models"]:  # first model that loads wins
+        try:
+            kw = {"torch_dtype": torch.float16}
+            try:
+                pipe = DiffusionPipeline.from_pretrained(model, variant="fp16", **kw)
+            except Exception:
+                pipe = DiffusionPipeline.from_pretrained(model, **kw)
+            pipe.to("cuda")
+            used = model
+            break
+        except Exception as e:
+            note(f"load {model} failed: {e}")
+    if pipe is None:
+        raise RuntimeError("no image model could be loaded")
+    try:
+        pipe.vae.enable_tiling()
+    except Exception:
+        pass
+    note(f"pipeline ready: {used}")
+    RESULT["model"] = used
+
+    for ch in JOB["chars"]:
+        cid = ch["id"]
+        try:
+            files = []
+            for k in range(JOB["candidates"]):
+                g = torch.Generator("cuda").manual_seed(ch["seed"] + k)
+                img = pipe(prompt=ch["prompt"], negative_prompt=JOB["negative_prompt"],
+                           width=JOB["width"], height=JOB["height"], num_inference_steps=JOB["steps"],
+                           guidance_scale=JOB["guidance"], generator=g).images[0]
+                name = f"{cid}_{k}.jpg"
+                img.convert("RGB").save(f"{OUT}/images/{name}", quality=93)
+                files.append(name)
+            RESULT["chars"][cid] = {"ok": True, "files": files}
+            note(f"{cid}: {len(files)} images")
+        except Exception as e:
+            RESULT["chars"][cid] = {"ok": False, "error": f"{e}"}
+            note(f"{cid} failed: {traceback.format_exc()[-600:]}")
+        save_result()
+except Exception:
+    RESULT["fatal"] = traceback.format_exc()[-2000:]
+    note("FATAL " + RESULT["fatal"])
+finally:
+    save_result()

@@ -1,0 +1,22 @@
+# One-time Kaggle job: download the video model, convert it to fp16 and save it as this
+# kernel's output (~13 GB, under Kaggle's 20 GB output limit). The clip kernel then attaches
+# this output via "kernel_sources" so weights are never downloaded again on each run.
+import os
+import subprocess
+import sys
+
+MODEL = "__MODEL__"
+subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-U", "diffusers", "transformers",
+                "accelerate", "sentencepiece", "hf_transfer"], check=True)
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+
+import torch  # noqa: E402
+from diffusers import LTXImageToVideoPipeline  # noqa: E402
+
+pipe = LTXImageToVideoPipeline.from_pretrained(MODEL, torch_dtype=torch.float16, low_cpu_mem_usage=True)
+pipe.save_pretrained("/kaggle/working/weights", safe_serialization=True, max_shard_size="5GB")
+total = 0
+for root, _, files in os.walk("/kaggle/working/weights"):
+    for f in files:
+        total += os.path.getsize(os.path.join(root, f))
+print(f"saved {total / 1e9:.2f} GB")

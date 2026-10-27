@@ -1,0 +1,175 @@
+# Runs on a Kaggle T4 GPU. Generated from kaggle_job/generate.py.tmpl - do not edit the copy.
+# Image-to-video for every scene of ONE video in a single kernel run (startup is expensive).
+import base64
+import glob
+import io
+import json
+import os
+import subprocess
+import sys
+import time
+import traceback
+
+# fewer fragmentation OOMs on the 15 GB T4 (Wan 2.2 5B fills it almost completely)
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+T0 = time.time()
+JOB = json.loads(base64.b64decode("__JOB_B64__").decode("utf-8"))
+OUT = "/kaggle/working"
+os.makedirs(f"{OUT}/clips", exist_ok=True)
+RESULT = {"scenes": {}, "log": [], "started": T0}
+
+
+def note(msg):
+    line = f"[{time.time() - T0:7.1f}s] {msg}"
+    print(line, flush=True)
+    RESULT["log"].append(line)
+
+
+def save_result():
+    RESULT["elapsed_s"] = time.time() - T0
+    with open(f"{OUT}/result.json", "w") as f:
+        json.dump(RESULT, f, indent=1)
+
+
+try:
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-U", *JOB["pip"]], check=True)
+    note("pip done")
+
+    import numpy as np
+    import torch
+    import diffusers
+    from diffusers.utils import export_to_video
+    from PIL import Image
+
+    note(f"torch {torch.__version__} cuda={torch.cuda.is_available()} "
+         f"gpu={torch.cuda.get_device_name(0) if torch.cuda.is_available() else '-'}")
+
+    # weights: attached kernel output (no download) or the Hugging Face hub
+    src = JOB["model"]
+    for cand in glob.glob("/kaggle/input/*/weights/model_index.json") + glob.glob(
+            "/kaggle/input/*/*/weights/model_index.json"):
+        src = os.path.dirname(cand)
+        break
+    note(f"loading {src}")
+
+    KIND = JOB.get("pipeline", "ltx")  # ltx | wan | vace
+    WAN = KIND in ("wan", "vace")
+
+    def group_offload(p):
+        """Stream weights layer by layer from CPU RAM: a 5B model + 11 GB text encoder on a 15 GB T4."""
+        from diffusers.hooks import apply_group_offloading
+        cuda, cpu = torch.device("cuda"), torch.device("cpu")
+        p.transformer.enable_group_offload(onload_device=cuda, offload_device=cpu,
+                                           offload_type="leaf_level", use_stream=True)
+        apply_group_offloading(p.text_encoder, onload_device=cuda, offload_device=cpu,
+                               offload_type="leaf_level", use_stream=True)
+        for name in ("vae", "image_encoder"):
+            m = getattr(p, name, None)
+            if m is not None:
+                m.to(cuda)
+
+    EMBEDS = {}
+
+    def load(dtype):
+        if WAN:  # Wan 2.x: its VAE must stay fp32 or the frames come out garbage
+            vae = diffusers.AutoencoderKLWan.from_pretrained(src, subfolder="vae", torch_dtype=torch.float32)
+            cls = diffusers.WanVACEPipeline if KIND == "vace" else diffusers.WanImageToVideoPipeline
+            p = cls.from_pretrained(src, vae=vae, torch_dtype=dtype)
+        else:
+            p = diffusers.LTXImageToVideoPipeline.from_pretrained(src, torch_dtype=dtype)
+        if WAN:
+            # model_cpu_offload only evicts the 11 GB UMT5 text encoder when the transformer runs, so
+            # it was still on the GPU during the VAE encode -> OOM even for the 1.3B model. Encode
+            # every prompt up front, then drop the text encoder from the GPU for good.
+            p.text_encoder.to("cuda", dtype=torch.bfloat16)  # UMT5 overflows in fp16
+            for sc in JOB["scenes"]:
+                with torch.no_grad():  # without it autograd kept every encoder activation on the GPU
+                    pe, ne = p.encode_prompt(sc["prompt"], JOB["negative_prompt"],
+                                             do_classifier_free_guidance=True, device=torch.device("cuda"))
+                EMBEDS[sc["index"]] = (pe.detach().to(dtype).cpu(), ne.detach().to(dtype).cpu())
+            p.text_encoder.to("cpu")
+            p.text_encoder = None
+            import gc
+            gc.collect()
+            torch.cuda.empty_cache()
+            note(f"prompts encoded; GPU {torch.cuda.memory_allocated() / 2**30:.1f} GB in use")
+        if JOB.get("offload") == "group":
+            group_offload(p)
+        else:
+            p.enable_model_cpu_offload()
+        try:
+            p.vae.enable_tiling()
+        except Exception:
+            pass
+        return p
+
+    dtype = torch.float16  # T4 has no native bf16
+    pipe = load(dtype)
+    note("pipeline ready")
+
+    def bad(frames):
+        a = np.asarray(frames[len(frames) // 2]).astype(np.float32)
+        return (not np.isfinite(a).all()) or a.std() < 3
+
+    W, H = JOB["width"], JOB["height"]
+    for sc in JOB["scenes"]:
+        i = sc["index"]
+        if time.time() - T0 > JOB["time_budget_s"]:
+            RESULT["scenes"][str(i)] = {"ok": False, "error": "time budget exhausted"}
+            continue
+        t = time.time()
+        try:
+            img = Image.open(io.BytesIO(base64.b64decode(sc["image_b64"]))).convert("RGB")
+            s = max(W / img.width, H / img.height)
+            img = img.resize((round(img.width * s), round(img.height * s)), Image.LANCZOS)
+            l, tp = (img.width - W) // 2, (img.height - H) // 2
+            img = img.crop((l, tp, l + W, tp + H))
+            kw = dict(image=img, prompt=sc["prompt"], negative_prompt=JOB["negative_prompt"],
+                      width=W, height=H, num_frames=sc["frames"],
+                      num_inference_steps=JOB["steps"], guidance_scale=JOB["guidance"])
+            if WAN:
+                pe, ne = EMBEDS[i]
+                kw.pop("prompt")
+                kw.pop("negative_prompt")
+                kw.update(prompt_embeds=pe.to("cuda"), negative_prompt_embeds=ne.to("cuda"))
+            if KIND == "vace":  # image-to-video through VACE: keep frame 0, generate the rest
+                n = sc["frames"]
+                gray = Image.new("RGB", (W, H), (128, 128, 128))
+                kw.pop("image")
+                kw["video"] = [img] + [gray] * (n - 1)
+                kw["mask"] = [Image.new("L", (W, H), 0)] + [Image.new("L", (W, H), 255)] * (n - 1)
+            extra = {} if WAN else dict(decode_timestep=0.05, decode_noise_scale=0.025)
+            for attempt in range(2):
+                # LTX in diffusers 0.3x rejects cpu generators
+                g = torch.Generator("cuda").manual_seed(sc["seed"] + attempt)
+                try:
+                    frames = pipe(**kw, **extra, generator=g).frames[0]
+                except TypeError:
+                    extra = {}
+                    frames = pipe(**kw, generator=g).frames[0]
+                if not bad(frames):
+                    break
+                note(f"scene {i}: bad frames with {dtype}")
+                if dtype == torch.float16:
+                    dtype = torch.bfloat16
+                    del pipe
+                    torch.cuda.empty_cache()
+                    pipe = load(dtype)
+            else:
+                raise RuntimeError("model produced blank/NaN frames")
+            path = f"{OUT}/clips/scene_{i:02d}.mp4"
+            export_to_video(frames, path, fps=JOB["fps"])
+            RESULT["scenes"][str(i)] = {"ok": True, "file": os.path.basename(path), "seconds": time.time() - t}
+            note(f"scene {i} done in {time.time() - t:.0f}s")
+        except Exception as e:
+            RESULT["scenes"][str(i)] = {"ok": False, "error": repr(e)[:500]}
+            note(f"scene {i} failed: {e!r}")
+            traceback.print_exc()
+            torch.cuda.empty_cache()
+        save_result()
+except Exception as e:
+    RESULT["fatal"] = repr(e)[:1000]
+    traceback.print_exc()
+finally:
+    save_result()
+    note("finished")

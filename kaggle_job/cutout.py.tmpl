@@ -1,0 +1,43 @@
+# Runs on a Kaggle CPU. Generated from kaggle_job/cutout.py.tmpl - do not edit the copy.
+# Background removal (rembg) for pictures whose background isn't plain, returns RGBA PNGs.
+import base64
+import io
+import json
+import os
+import subprocess
+import sys
+import time
+import traceback
+
+T0 = time.time()
+JOB = json.loads(base64.b64decode("__JOB_B64__").decode("utf-8"))
+OUT = "/kaggle/working"
+os.makedirs(f"{OUT}/cutouts", exist_ok=True)
+RESULT = {"items": {}, "log": []}
+
+
+def note(msg):
+    RESULT["log"].append(f"[{time.time() - T0:7.1f}s] {msg}")
+    print(RESULT["log"][-1], flush=True)
+
+
+try:
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "rembg[cpu]", "onnxruntime"], check=True)
+    from PIL import Image
+    from rembg import new_session, remove
+    session = new_session(JOB.get("model", "isnet-general-use"))
+    note("model ready")
+    for name, b64 in JOB["images"].items():
+        try:
+            im = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+            out = remove(im, session=session, alpha_matting=True)
+            out.save(f"{OUT}/cutouts/{name}.png")
+            RESULT["items"][name] = {"ok": True, "file": f"{name}.png"}
+            note(f"{name} done")
+        except Exception as e:
+            RESULT["items"][name] = {"ok": False, "error": repr(e)[:400]}
+except Exception:
+    RESULT["fatal"] = traceback.format_exc()[-1500:]
+finally:
+    with open(f"{OUT}/result.json", "w") as f:
+        json.dump(RESULT, f, indent=1)

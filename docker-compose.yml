@@ -1,0 +1,16 @@
+services:
+  pipeline:
+    build: .
+    image: ai-tiktok-pipeline:latest
+    container_name: ai-tiktok-pipeline
+    restart: always
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    # small VPS friendly: whisper-small + ffmpeg fit in ~2 GB
+    mem_limit: 3g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,205 @@
+{
+ "lemon": {
+  "path": "E:\\Claude_Projects\\ai-tiktok-pipeline\\data\\jobs\\00004\\images\\lemon.jpg",
+  "meta": {
+   "mouth": [
+    0.42,
+    0.5,
+    0.58,
+    0.56
+   ],
+   "guessed": true,
+   "source": "cloudflare"
+  }
+ },
+ "cucumber": {
+  "path": "E:\\Claude_Projects\\ai-tiktok-pipeline\\data\\jobs\\00004\\images\\cucumber.jpg",
+  "meta": {
+   "mouth": [
+    0.42,
+    0.5,
+    0.58,
+    0.56
+   ],
+   "guessed": true,
+   "source": "cloudflare"
+  }
+ },
+ "tomato": {
+  "path": "E:\\Claude_Projects\\ai-tiktok-pipeline\\data\\jobs\\00004\\images\\tomato.jpg",
+  "meta": {
+   "mouth": [
+    0.42,
+    0.5,
+    0.58,
+    0.56
+   ],
+   "guessed": true,
+   "source": "cloudflare"
+  }
+ },
+ "__scenes__": [
+  {
+   "path": "E:\\Claude_Projects\\ai-tiktok-pipeline\\data\\jobs\\00004\\images\\scene_00.jpg",
+   "meta": {
+    "eyes": [
+     [
+      0.319,
+      0.363,
+      0.439,
+      0.452
+     ],
+     [
+      0.521,
+      0.366,
+      0.63,
+      0.451
+     ]
+    ],
+    "mouth": [
+     0.362,
+     0.555,
+     0.608,
+     0.621
+    ],
+    "face_found": true,
+    "source": "cloudflare_scene"
+   }
+  },
+  {
+   "path": "E:\\Claude_Projects\\ai-tiktok-pipeline\\data\\jobs\\00004\\images\\scene_01.jpg",
+   "meta": {
+    "eyes": [
+     [
+      0.383,
+      0.396,
+      0.485,
+      0.462
+     ],
+     [
+      0.539,
+      0.403,
+      0.64,
+      0.467
+     ]
+    ],
+    "mouth": [
+     0.452,
+     0.535,
+     0.58,
+     0.574
+    ],
+    "face_found": true,
+    "source": "cloudflare_scene"
+   }
+  },
+  {
+   "path": "E:\\Claude_Projects\\ai-tiktok-pipeline\\data\\jobs\\00004\\images\\scene_02.jpg",
+   "meta": {
+    "eyes": [
+     [
+      0.319,
+      0.26,
+      0.474,
+      0.398
+     ],
+     [
+      0.545,
+      0.247,
+      0.69,
+      0.38
+     ]
+    ],
+    "mouth": [
+     0.423,
+     0.538,
+     0.65,
+     0.608
+    ],
+    "face_found": true,
+    "source": "cloudflare_scene"
+   }
+  },
+  {
+   "path": "E:\\Claude_Projects\\ai-tiktok-pipeline\\data\\jobs\\00004\\images\\scene_03.jpg",
+   "meta": {
+    "eyes": [
+     [
+      0.44,
+      0.33,
+      0.508,
+      0.396
+     ],
+     [
+      0.552,
+      0.343,
+      0.638,
+      0.409
+     ]
+    ],
+    "mouth": [
+     0.474,
+     0.471,
+     0.564,
+     0.529
+    ],
+    "face_found": true,
+    "source": "cloudflare_scene"
+   }
+  },
+  {
+   "path": "E:\\Claude_Projects\\ai-tiktok-pipeline\\data\\jobs\\00004\\images\\scene_04.jpg",
+   "meta": {
+    "eyes": [
+     [
+      0.396,
+      0.414,
+      0.502,
+      0.532
+     ],
+     [
+      0.56,
+      0.421,
+      0.672,
+      0.542
+     ]
+    ],
+    "mouth": [
+     0.483,
+     0.631,
+     0.584,
+     0.658
+    ],
+    "face_found": true,
+    "source": "cloudflare_scene"
+   }
+  },
+  {
+   "path": "E:\\Claude_Projects\\ai-tiktok-pipeline\\data\\jobs\\00004\\images\\scene_05.jpg",
+   "meta": {
+    "eyes": [
+     [
+      0.433,
+      0.339,
+      0.492,
+      0.403
+     ],
+     [
+      0.542,
+      0.374,
+      0.595,
+      0.429
+     ]
+    ],
+    "mouth": [
+     0.431,
+     0.465,
+     0.558,
+     0.532
+    ],
+    "face_found": true,
+    "source": "cloudflare_scene"
+   }
+  }
+ ]
+}

@@ -1,0 +1,71 @@
+{
+ "title": "سر الليمونة الطازجة",
+ "format": "advice",
+ "characters": [
+  {
+   "id": "lemon",
+   "name": "ليمونة",
+   "voice": "ar-EG-SalmaNeural",
+   "look": "a bright yellow shiny lemon with a cute sad face and big watery eyes"
+  },
+  {
+   "id": "cucumber",
+   "name": "خيارة",
+   "voice": "ar-EG-SalmaNeural",
+   "look": "a long fresh green cucumber with tiny bumps, bright eyes and a tiny flower on her head"
+  },
+  {
+   "id": "tomato",
+   "name": "طماطم",
+   "voice": "ar-EG-ShakirNeural",
+   "look": "a plump shiny red tomato with a green leafy cap, big expressive eyes, thick eyebrows"
+  }
+ ],
+ "scenes": [
+  {
+   "character_id": "lemon",
+   "line_ar": "الحقوني يا جدعان! أنا بنشف ودبلت خالص، باب التلاجة ده مقبرة الليمون رسمي!",
+   "visual_prompt_en": "A cute 3D cartoon yellow lemon sitting in a fridge door shelf, crying dramatically with big watery eyes, low angle close-up shot.",
+   "emotion": "scared"
+  },
+  {
+   "character_id": "cucumber",
+   "line_ar": "جرى إيه يا ليمونة؟ مالك عمالة تعيطي وتعملي دراما على الصبح كده ليه؟",
+   "visual_prompt_en": "A stylish 3D green cucumber character looking relaxed on a fridge shelf, eyebrows raised in amusement, medium close-up shot.",
+   "emotion": "sarcastic"
+  },
+  {
+   "character_id": "lemon",
+   "line_ar": "جلدي نشف خلاص! بكره لما ماما تعصرني على الفول، مش هتطلع مني ولا نقطة عصير!",
+   "visual_prompt_en": "The tiny cute 3D lemon clutching her cheeks in panic, exaggerated shocked facial expression, tight close-up.",
+   "emotion": "sad"
+  },
+  {
+   "character_id": "cucumber",
+   "line_ar": "طب خدي السر ده! حطي نفسك ف برطمان فيه ماية مقفول ف التلاجة، هتقعدي أسابيع طرية ومليانة عصير!",
+   "visual_prompt_en": "The green cucumber smartly presenting a glass jar filled with fresh clear water inside the bright kitchen fridge, excited expression.",
+   "emotion": "excited"
+  },
+  {
+   "character_id": "tomato",
+   "line_ar": "طب والنبي يا خيارة، لو أنا حطيت نفسي ف ماية، هتحول لعصير طماطم بالمانجو؟",
+   "visual_prompt_en": "A chubby 3D red tomato popping out from behind a milk carton, looking extremely curious and naive, eyes wide with hope.",
+   "emotion": "surprised"
+  },
+  {
+   "character_id": "cucumber",
+   "line_ar": "إنت هتفضل طماطم للطبيخ يا خايب! أنتوا بقى بتعملوا إيه عشان الليمون ما ينشفش عندكم؟",
+   "visual_prompt_en": "The cucumber slapping her forehead in funny disbelief while smiling at the camera, cheerful background lighting.",
+   "emotion": "happy"
+  }
+ ],
+ "caption_ar": "سر خطير هيخلي الليمون يفضل طازة ف التلاجة أسابيع! 🍋✨",
+ "hashtags": [
+  "نصائح_مطبخ",
+  "توليفات_مصرية",
+  "كرتون_عربي",
+  "خضار_بيتكلم",
+  "مصر",
+  "تلاجة_العيلة"
+ ]
+}

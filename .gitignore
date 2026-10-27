@@ -1,0 +1,10 @@
+.venv/
+data/
+.env
+__pycache__/
+.pytest_cache/
+
+samples/
+bench/*_out/
+*.pyc
+models/
