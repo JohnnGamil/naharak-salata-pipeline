@@ -9,6 +9,10 @@ on:
       budget:
         description: "minutes of video making"
         default: "40"
+      dry:
+        description: "test copy of the state, posting off, Telegram off"
+        type: boolean
+        default: false
 concurrency:
   group: tick
   cancel-in-progress: false
@@ -37,6 +41,11 @@ jobs:
         run: |
           printf '%s\n' "$ENV_FILE" > .env
           echo "RUNNER=github" >> .env
+          if [ "${{ github.event.inputs.dry }}" = "true" ]; then
+            echo "STATE_NS=dryrun" >> .env
+            echo "UPLOAD_ENABLED=false" >> .env
+            echo "TELEGRAM_BOT_TOKEN=" >> .env
+          fi
       - name: tick
         run: python -m src.tick --budget "${{ github.event.inputs.budget || '40' }}"
       - name: tell John on Telegram

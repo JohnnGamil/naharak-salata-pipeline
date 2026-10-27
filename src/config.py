@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     # shared encrypted state in R2 for the GitHub runner + PC backup (src/state_sync.py)
     state_key: str = ""
     runner: str = "pc"  # "github" on the Actions runner
+    state_ns: str = "state"  # R2 prefix; "dryrun" = a test copy that never touches the real state
 
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""

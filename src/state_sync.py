@@ -36,8 +36,9 @@ def _fernet(key: str) -> Fernet:
     return Fernet(base64.urlsafe_b64encode(hashlib.sha256(key.encode()).digest()))
 
 
-def _object(key: str, name: str) -> str:
-    return f"state/{hashlib.sha256(('obj' + key).encode()).hexdigest()[:32]}/{name}"
+def _object(s, name: str) -> str:
+    # state_ns "state" is the real channel; another name (e.g. "dryrun") is a separate test copy
+    return f"{s.state_ns}/{hashlib.sha256(('obj' + s.state_key).encode()).hexdigest()[:32]}/{name}"
 
 
 def enabled(s) -> bool:
@@ -45,7 +46,7 @@ def enabled(s) -> bool:
 
 
 def _get(s, name: str) -> bytes | None:
-    r = httpx.get(r2.presign(s, "GET", _object(s.state_key, name)), timeout=300)
+    r = httpx.get(r2.presign(s, "GET", _object(s, name)), timeout=300)
     if r.status_code == 404:
         return None
     r.raise_for_status()
@@ -56,7 +57,7 @@ def _put(s, name: str, data: bytes) -> None:
     tmp = s.data_dir / f".{name}.upload"
     tmp.write_bytes(data)
     try:
-        r2.put_public(s, tmp, _object(s.state_key, name), "application/octet-stream")
+        r2.put_public(s, tmp, _object(s, name), "application/octet-stream")
     finally:
         tmp.unlink(missing_ok=True)
 
