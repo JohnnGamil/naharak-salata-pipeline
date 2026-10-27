@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import logging
+import os
 import sys
 import time
 
@@ -34,6 +35,9 @@ def morning(app, who: str) -> None:
     ready = len(app.db.ready_jobs())
     making = app.db.unfinished_jobs()
     where = "GitHub" if who == "github" else "الكمبيوتر (GitHub واقف)"
+    event = os.environ.get("GITHUB_EVENT_NAME", "")
+    if who == "github":
+        where += " - اشتغل لوحده في ميعاده ✅" if event == "schedule" else " (تشغيل يدوي)"
     app.tg.send(f"☀️ نهارك سلطة شغالة على {where}\n"
                 f"مواعيد النهارده: حوالي {times or '-'} (كل فيديو بينزل في خلال ساعة من ميعاده)\n"
                 f"فيديوهات جاهزة: {ready} | تحت التحضير: {len(making)}")

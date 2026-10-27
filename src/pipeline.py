@@ -153,7 +153,11 @@ class Pipeline:
         self.db.update_job(job_id, qa_json=json.dumps(res, ensure_ascii=False)[:20000])
         if res["passed"]:
             self.db.set_status(job_id, "QA_PASSED")
-            for c in self.story(job_id).characters:
+            story = self.story(job_id)
+            part = f" (الجزء {job['part']} من {job['parts']})" if job.get("series_id") else ""
+            self.tg.send_video(job["video_path"], f"🎬 فيديو جديد اتعمل{part}: {story.title}\n"
+                                                  f"هينزل في أقرب ميعاد نشر.\n\n{self.caption(job, story, self.s.channel_name)}")
+            for c in story.characters:
                 row = self.db.character(c.id)
                 self.db.upsert_character(c.id, episodes=(row["episodes"] if row else 0) + 1)
             return

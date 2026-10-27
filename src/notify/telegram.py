@@ -17,6 +17,22 @@ class Telegram:
     def enabled(self) -> bool:
         return bool(self.token and self.chat_id)
 
+    def send_video(self, video, caption: str) -> bool:
+        """A finished video with its text, so John sees it as soon as it is made (2026-10-28)."""
+        if not self.enabled:
+            return False
+        try:
+            with open(video, "rb") as f:
+                r = httpx.post(f"https://api.telegram.org/bot{self.token}/sendVideo", timeout=300,
+                               data={"chat_id": self.chat_id, "caption": caption[:1024], "supports_streaming": "true"},
+                               files={"video": ("video.mp4", f, "video/mp4")})
+            if r.status_code == 200:
+                return True
+            log.warning("telegram video %s: %s", r.status_code, r.text[:300])
+        except (httpx.HTTPError, OSError) as e:
+            log.warning("telegram video error: %s", e)
+        return False
+
     def send(self, text: str, throttle_key: str | None = None, throttle_s: float = 0) -> bool:
         """Send a message. With throttle_key, at most one message per throttle_s seconds."""
         if throttle_key and self.db is not None:
