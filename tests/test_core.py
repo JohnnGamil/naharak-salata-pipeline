@@ -467,10 +467,23 @@ def test_youtube_metadata_marks_shorts_and_ai():
 def test_channel_hashtag_on_every_caption():
     from src.pipeline import Pipeline
     story = Story.model_validate(SKITS[0])
-    assert Pipeline.caption({}, story, "نهارك سلطة").endswith("#نهارك_سلطة")
+    assert "#نهارك_سلطة" in Pipeline.caption({}, story, "نهارك سلطة")
     job = {"series_id": "s", "series_title": "لغز الجبنة", "part": 3, "parts": 3}
     cap = Pipeline.caption(job, story, "نهارك سلطة")
-    assert cap.endswith("#لغز_الجبنة\n#نهارك_سلطة") and "الجزء الجاي" not in cap  # last part: no "follow"
+    assert "#لغز_الجبنة" in cap and "#نهارك_سلطة" in cap and "الجزء الجاي" not in cap  # last part: no "follow"
+
+
+def test_hashtags_stay_under_each_platform_limit_and_are_linkable():
+    import re
+    from src.pipeline import Pipeline
+    story = Story.model_validate({**SKITS[0], "hashtags": ["fyp", "كوميديا مصرية", "مطبخ-ماما", "ضحك", "مصر",
+                                                            "اكسبلور", "الجبنة", "خضار", "😂"]})
+    job = {"series_id": "s", "series_title": "لغز الجبنة", "part": 1, "parts": 3}
+    for platform, limit in Pipeline.TAG_LIMIT.items():
+        tags = re.findall(r"#\S+", Pipeline.caption(job, story, "نهارك سلطة", platform))
+        assert len(tags) <= limit, platform
+        assert tags[0] == "#لغز_الجبنة" and "#نهارك_سلطة" in tags and "#fyp" not in tags
+        assert all(re.fullmatch(r"#[0-9A-Za-z_ء-ي]+", t) for t in tags), tags
 
 
 def test_quota_wait_pauses_job_instead_of_failing(tmp_path):

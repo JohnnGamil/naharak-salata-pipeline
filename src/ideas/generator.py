@@ -55,7 +55,10 @@ Write ONE new skit that BOTH kids and adults enjoy (think Pixar / Bakkar / Bougy
   different and fun to look at. Only that scene's speaking character in focus. No text in the image.
 - If a character snores or sleeps, write the snore in the line as "خخخخ" (a real snore sound is added).
 - emotion: one of neutral, happy, angry, sad, excited, scared, sarcastic, surprised.
-- caption_ar: short Egyptian Arabic TikTok caption with 1-2 emojis. hashtags: 4-8, no '#'.
+- caption_ar: short Egyptian Arabic TikTok caption with 1-2 emojis and a question that invites comments.
+- hashtags: exactly 4, Arabic, no '#', no spaces (use _): 1 broad Egyptian one people really search
+  (كوميديا_مصرية، ضحك، مصر), 2 specific to THIS story's topic (e.g. الجبنة_الرومي، مطبخ_ماما، الامتحانات),
+  1 about the format/genre (حكايات_الخضار، كارتون). Never fyp/foryou/explore/viral style tags.
 
 {bible}
 

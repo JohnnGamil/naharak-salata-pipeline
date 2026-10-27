@@ -20,7 +20,7 @@ from .compose.composer import compose
 from .compose.thumbnail import cover_for_job, cover_intro
 from .db import DB
 from .ideas.generator import IdeaGenerator
-from .ideas.schema import Story
+from .ideas.schema import clean_tag, Story
 from .images.pollinations import ImageGen
 from .llm import LLM
 from .notify.telegram import Telegram
@@ -156,7 +156,7 @@ class Pipeline:
             story = self.story(job_id)
             part = f" (الجزء {job['part']} من {job['parts']})" if job.get("series_id") else ""
             self.tg.send_video(job["video_path"], f"🎬 فيديو جديد اتعمل{part}: {story.title}\n"
-                                                  f"هينزل في أقرب ميعاد نشر.\n\n{self.caption(job, story, self.s.channel_name)}")
+                                                  f"هينزل في أقرب ميعاد نشر.\n\n{self.caption(job, story, self.s.channel_name, 'tiktok_manual')}")
             for c in story.characters:
                 row = self.db.character(c.id)
                 self.db.upsert_character(c.id, episodes=(row["episodes"] if row else 0) + 1)
@@ -286,15 +286,38 @@ class Pipeline:
                 out["facebook"] = FacebookPageUploader(self.db, self.s)
         return out or {"outbox": OutboxUploader(self.s.data_dir / "outbox")}
 
-    @staticmethod
-    def caption(job: dict, story, channel: str = "") -> str:
-        brand = ("\n#" + "_".join(channel.split())) if channel else ""
-        if not job.get("series_id"):
-            return f"{story.full_caption}{brand}"[:2200]
-        tag = "#" + "_".join((job.get("series_title") or "مسلسل").split())
-        head = f"{job.get('series_title') or ''} | الجزء {job['part']} من {job['parts']}".strip(" |")
-        follow = "\nتابعونا عشان الجزء الجاي 👀" if job["part"] < job["parts"] else ""
-        return f"{head}\n{story.full_caption}{follow}\n{tag}{brand}"[:2200]
+    # hashtags per platform (checked 2026-10-28): TikTok and Instagram cap a post at 5 (Instagram
+    # refuses more), YouTube shows the first 3 above the title and ignores them all when stuffed,
+    # Facebook does best with very few. Over the limit hurts reach, so we stay under it.
+    TAG_LIMIT = {"tiktok": 5, "tiktok_manual": 5, "instagram": 5, "facebook": 3, "youtube": 4, "outbox": 5}
+    WEAK_TAGS = {"fyp", "foryou", "foryoupage", "viral", "explore", "اكسبلور", "ترند", "تريند", "فوريو"}
+
+    @classmethod
+    def hashtags(cls, job: dict, story, channel: str = "", platform: str = "tiktok") -> list[str]:
+        """Most useful first: the series tag (people follow the parts), the story's topic tags,
+        the channel tag; generic 'fyp'-style tags only if room is left."""
+        series = [clean_tag(job.get("series_title") or "")] if job.get("series_id") else []
+        brand = [clean_tag("_".join(channel.split()))] if channel else []
+        topical = [t for t in story.hashtags if t.lower() not in cls.WEAK_TAGS]
+        weak = [t for t in story.hashtags if t.lower() in cls.WEAK_TAGS]
+        limit = cls.TAG_LIMIT.get(platform, 5)
+        picked: list[str] = []
+        for t in [*series, *topical[: max(1, limit - len(series) - len(brand))], *brand, *topical, *weak]:
+            if t and t not in picked and len(picked) < limit:
+                picked.append(t)
+        return picked
+
+    @classmethod
+    def caption(cls, job: dict, story, channel: str = "", platform: str = "tiktok") -> str:
+        tags = " ".join(f"#{t}" for t in cls.hashtags(job, story, channel, platform))
+        text = story.caption_ar.strip()
+        if job.get("series_id"):
+            head = f"{job.get('series_title') or ''} | الجزء {job['part']} من {job['parts']}".strip(" |")
+            # Gemini's caption often says "تابعوا" already: don't say it twice
+            follow = ("\nتابعونا عشان الجزء الجاي 👀" if job["part"] < job["parts"] and "تابع" not in text
+                      else "")
+            text = f"{head}\n{text}{follow}"
+        return f"{text}\n\n{tags}".strip()[:2200]
 
     @staticmethod
     def yt_title(job: dict, story) -> str:
@@ -319,12 +342,12 @@ class Pipeline:
                     cover_intro(video, cover, intro)
                 video = intro
             if platform == "youtube":
-                res = up.upload(video, self.caption(job, story, self.s.channel_name), title=self.yt_title(job, story),
-                                tags=story.hashtags, cover=cover)
+                res = up.upload(video, self.caption(job, story, self.s.channel_name, platform),
+                                title=self.yt_title(job, story), tags=story.hashtags, cover=cover)
             elif platform in ("instagram", "facebook", "tiktok_manual"):
-                res = up.upload(video, self.caption(job, story, self.s.channel_name), cover=cover)
+                res = up.upload(video, self.caption(job, story, self.s.channel_name, platform), cover=cover)
             else:
-                res = up.upload(video, self.caption(job, story, self.s.channel_name))
+                res = up.upload(video, self.caption(job, story, self.s.channel_name, platform))
         except Exception as e:
             retry = getattr(e, "retryable", True)
             prev = self.db.post(job["id"], platform)

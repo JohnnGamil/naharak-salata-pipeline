@@ -62,6 +62,16 @@ def banned_words(text: str) -> list[str]:
     return sorted(hits)
 
 
+def clean_tag(t: str) -> str:
+    """A hashtag that platforms really link: letters (Arabic/Latin), digits and _ only - a space,
+    dash, dot, apostrophe or emoji cuts the link at that point. Not digits-only, at most 30 chars."""
+    t = re.sub(r"[\s\-.]+", "_", str(t).strip().lstrip("#"))
+    t = re.sub(r"[ً-ْـ]", "", t)  # tashkeel/tatweel
+    t = re.sub(r"[^0-9A-Za-z_ء-ي٠-٩]", "", t).strip("_")
+    t = re.sub(r"_+", "_", t)
+    return "" if not t or t.isdigit() else t[:30]
+
+
 class Character(BaseModel):
     id: str = Field(min_length=2, max_length=24)
     name: str = Field(min_length=1, max_length=30)
@@ -124,7 +134,7 @@ class Story(BaseModel):
     def tags(cls, v: list[str]) -> list[str]:
         out = []
         for t in v:
-            t = re.sub(r"\s+", "_", t.strip().lstrip("#"))
+            t = clean_tag(t)
             if t and t not in out:
                 out.append(t)
         return out
