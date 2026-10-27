@@ -49,6 +49,7 @@ def main() -> int:
     args = ap.parse_args()
     s = get_settings()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # its lines carry signed R2 links
     if not state_sync.enabled(s):
         log.error("STATE_KEY / R2 not set")
         return 2
