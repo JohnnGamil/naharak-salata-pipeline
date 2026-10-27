@@ -39,6 +39,9 @@ jobs:
           echo "RUNNER=github" >> .env
       - name: tick
         run: python -m src.tick --budget "${{ github.event.inputs.budget || '40' }}"
+      - name: tell John on Telegram
+        if: failure()
+        run: python scripts/notify_failure.py "tick"
       - name: logs
         if: always()
         uses: actions/upload-artifact@v4

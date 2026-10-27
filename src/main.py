@@ -101,8 +101,12 @@ class App:
             break  # at most one post per tick; a failed slot is retried next minute until MAX_LATE_S
 
     def health(self) -> None:
-        last = self.db.last_upload_ts() or self.started
-        if time.time() - last > 24 * 3600 and time.time() - self.started > 24 * 3600:
+        # hourly GitHub runs start fresh each time: count from the first run ever, kept in the DB
+        first = self.db.get("first_seen_ts") or self.started
+        if not self.db.get("first_seen_ts"):
+            self.db.put("first_seen_ts", first)
+        last = self.db.last_upload_ts() or first
+        if time.time() - last > 24 * 3600 and time.time() - first > 24 * 3600:
             hours = (time.time() - last) / 3600
             self.tg.send(f"🚨 No successful upload in {hours:.0f} h. Check the logs.",
                          throttle_key="no_upload", throttle_s=6 * 3600)

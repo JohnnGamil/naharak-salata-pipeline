@@ -8,6 +8,7 @@ push the state back.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import logging
 import sys
 import time
@@ -18,26 +19,54 @@ from .config import get_settings
 log = logging.getLogger("tick")
 
 
-def run(budget_min: float) -> None:
+def _posted(app) -> int:
+    return app.db.q("SELECT COUNT(*) AS n FROM posts WHERE status='DONE'")[0]["n"]
+
+
+def morning(app, who: str) -> None:
+    """First run of the Cairo day: one Telegram line that the machine is alive + today's plan."""
+    today = dt.datetime.now(app.tz).date().isoformat()
+    if app.db.get("morning_msg_day") == today:
+        return
+    app.db.put("morning_msg_day", today)
+    slots = app.db.q("SELECT due_ts FROM post_slots WHERE day=? ORDER BY due_ts", (today,))
+    times = " و ".join(dt.datetime.fromtimestamp(r["due_ts"], app.tz).strftime("%H:%M") for r in slots)
+    ready = len(app.db.ready_jobs())
+    making = app.db.unfinished_jobs()
+    where = "GitHub" if who == "github" else "الكمبيوتر (GitHub واقف)"
+    app.tg.send(f"☀️ نهارك سلطة شغالة على {where}\n"
+                f"مواعيد النهارده: حوالي {times or '-'} (كل فيديو بينزل في خلال ساعة من ميعاده)\n"
+                f"فيديوهات جاهزة: {ready} | تحت التحضير: {len(making)}")
+
+
+def run(budget_min: float, s, who: str) -> None:
     from .main import App  # after the state pull: App opens the DB
 
     app = App()
     end = time.time() + budget_min * 60
     app.ensure_slots()
-    app.post_tick()
+    morning(app, who)
+
+    def post_and_save() -> None:
+        n = _posted(app)
+        app.post_tick()
+        if _posted(app) != n:  # save at once: a run cut off later must never post the same video twice
+            state_sync.push(s)
+
+    post_and_save()
     app.pipe.retry_posts()
     while time.time() < end:
-        if time.time() + 60 < end:
-            app.post_tick()  # a slot may fall due while a long video is being made
         before = app.db.unfinished_jobs()
         ready = len(app.db.ready_jobs())
         if ready >= app.s.buffer_size and not before:
             break
         app.produce()
+        state_sync.push(s)  # keep finished stages even if the runner is stopped
+        post_and_save()  # a slot may fall due while a long video is being made
         after = app.db.unfinished_jobs()
         if after and before and after[0]["id"] == before[0]["id"] and after[0]["status"] == before[0]["status"]:
             break  # waiting on a quota (QuotaWait) or backing off: nothing more to do this hour
-    app.post_tick()
+    post_and_save()
     app.health()
 
 
@@ -68,7 +97,7 @@ def main() -> int:
     state_sync.write_lease(s, who, "running")
     state_sync.pull(s)
     try:
-        run(args.budget)
+        run(args.budget, s, who)
     finally:
         state_sync.push(s)
         state_sync.write_lease(s, who, "done")

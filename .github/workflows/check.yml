@@ -1,5 +1,5 @@
 name: check-services
-# Can the runner reach every outside service? Read-only, spends no daily allowance.
+# All tests + can the runner reach every outside service? Read-only, spends no daily allowance.
 on: workflow_dispatch
 jobs:
   check:
@@ -22,4 +22,5 @@ jobs:
         run: |
           printf '%s\n' "$ENV_FILE" > .env
           echo "RUNNER=github" >> .env
+      - run: python -m pytest -q tests
       - run: python scripts/check_services.py 2>/dev/null
