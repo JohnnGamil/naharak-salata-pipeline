@@ -55,17 +55,19 @@ def run(budget_min: float, s, who: str) -> None:
 
     post_and_save()
     app.pipe.retry_posts()
+    def snapshot():
+        return ([(j["id"], j["status"]) for j in app.db.unfinished_jobs()], len(app.db.ready_jobs()),
+                app.db.q("SELECT MAX(id) AS m FROM jobs")[0]["m"])
+
     while time.time() < end:
-        before = app.db.unfinished_jobs()
-        ready = len(app.db.ready_jobs())
-        if ready >= app.s.buffer_size and not before:
+        before = snapshot()
+        if before[1] >= app.s.buffer_size and not before[0]:
             break
         app.produce()
+        if snapshot() == before:
+            break  # waiting on a quota (QuotaWait) or backing off: nothing more to do this hour
         state_sync.push(s)  # keep finished stages even if the runner is stopped
         post_and_save()  # a slot may fall due while a long video is being made
-        after = app.db.unfinished_jobs()
-        if after and before and after[0]["id"] == before[0]["id"] and after[0]["status"] == before[0]["status"]:
-            break  # waiting on a quota (QuotaWait) or backing off: nothing more to do this hour
     post_and_save()
     app.health()
 

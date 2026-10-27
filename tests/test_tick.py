@@ -172,3 +172,13 @@ def test_github_skips_while_the_pc_backup_is_mid_run(world):
     before = dict(world.r2)
     world.run()
     assert world.r2["state.bin"] == before["state.bin"]
+
+
+def test_paused_production_ends_the_run_quickly(world, monkeypatch):
+    calls = [0]
+
+    def paused(self):  # quota wait: produce does nothing
+        calls[0] += 1
+    monkeypatch.setattr(main_mod.App, "produce", paused)
+    world.run()
+    assert calls[0] == 1
