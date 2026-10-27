@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     r2_secret_key: str = ""
     r2_bucket: str = ""
     r2_public_base: str = ""  # e.g. https://pub-xxxx.r2.dev
+    # shared encrypted state in R2 for the GitHub runner + PC backup (src/state_sync.py)
+    state_key: str = ""
+    runner: str = "pc"  # "github" on the Actions runner
 
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""

@@ -12,3 +12,4 @@ pillow>=10.3
 kaggle>=1.7
 tzdata
 pytest>=8
+cryptography>=42

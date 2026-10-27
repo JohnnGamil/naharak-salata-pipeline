@@ -141,12 +141,26 @@ class App:
             print(dict(r), dt.datetime.fromtimestamp(r["due_ts"], self.tz).strftime("%Y-%m-%d %H:%M"))
 
 
+def backup_loop() -> int:
+    """Since 2026-10-28 GitHub Actions runs the channel; the PC (start_pipeline.bat at logon) only
+    steps in through src.tick --backup when GitHub has been quiet for 3 hours."""
+    import subprocess
+    setup_logging(get_settings().data_dir, "INFO")
+    log.info("PC backup mode: checking GitHub every 30 min")
+    while True:
+        subprocess.run([sys.executable, "-m", "src.tick", "--backup"])
+        time.sleep(30 * 60)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--once", action="store_true")
     ap.add_argument("--post-now", action="store_true")
     ap.add_argument("--status", action="store_true")
     args = ap.parse_args()
+    s = get_settings()
+    if not (args.once or args.post_now or args.status) and s.state_key and s.runner == "pc":
+        return backup_loop()
     app = App()
     if args.once:
         job_id = app.pipe.produce_one()
