@@ -12,5 +12,5 @@ curl -s -X PUT "$A" -H "$H" \
   -F "worker.js=@cron_worker/worker.js;type=application/javascript+module" | ok upload
 printf '{"name":"GH_TOKEN","text":"%s","type":"secret_text"}' "$GH_DISPATCH_TOKEN" |
   curl -s -X PUT "$A/secrets" -H "$H" -H "Content-Type: application/json" --data-binary @- | ok secret
-curl -s -X PUT "$A/schedules" -H "$H" -H "Content-Type: application/json" -d '[{"cron":"23 4-21 * * *"}]' | ok cron
+curl -s -X PUT "$A/schedules" -H "$H" -H "Content-Type: application/json" -d '[{"cron":"0 4-21 * * *"}]' | ok cron
 echo "clock is on Cloudflare"

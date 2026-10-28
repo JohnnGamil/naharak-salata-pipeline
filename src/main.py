@@ -30,7 +30,8 @@ MAX_LATE_S = 4 * 3600  # a slot missed by more than this (machine was off) is sk
 
 def plan_slots(day: dt.date, n: int, windows: list[tuple[int, int]], tz: ZoneInfo,
                rnd: random.Random | None = None) -> list[float]:
-    """Spread n posts over the windows (round robin), random time inside each sub-window."""
+    """Spread n posts over the windows (round robin), a random WHOLE hour inside each sub-window: the
+    hourly run starts on the hour, so a 21:00 slot really posts at ~21:00 (John, 2026-10-28)."""
     rnd = rnd or random.Random()
     per_window: dict[int, int] = {}
     for k in range(n):
@@ -42,7 +43,9 @@ def plan_slots(day: dt.date, n: int, windows: list[tuple[int, int]], tz: ZoneInf
             end += 24 * 60
         span = (end - start) / count
         for j in range(count):
-            minute = start + span * j + rnd.uniform(0.1, 0.9) * span
+            lo, hi = start + span * j, start + span * (j + 1)
+            hours = [h for h in range(int(lo // 60), int(hi // 60) + 1) if lo <= h * 60 < hi]
+            minute = 60 * rnd.choice(hours) if hours else 60 * int((lo + hi) / 2 // 60)
             base = dt.datetime.combine(day, dt.time(0, 0), tzinfo=tz)
             out.append((base + dt.timedelta(minutes=minute)).timestamp())
     return sorted(out)

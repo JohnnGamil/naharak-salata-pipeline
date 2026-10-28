@@ -23,7 +23,7 @@ from ..util import ff_path, ffprobe_duration, run
 log = logging.getLogger(__name__)
 
 LEAD_H = 2.5  # a story goes up when the slot is at most this far away (the hourly run makes it ~2 h)
-RUN_MINUTE = 23  # the Cloudflare clock starts a run at :23, so a due video posts at the next :23
+RUN_MINUTE = 0  # the Cloudflare clock starts a run on the hour, so a due video posts at the next :00
 PART_WORD = {2: "التاني", 3: "التالت والأخير", 4: "الرابع", 5: "الخامس"}
 
 

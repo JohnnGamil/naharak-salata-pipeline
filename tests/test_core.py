@@ -615,6 +615,18 @@ def test_countdown_time_text():
     from src.compose.story import post_time, when_text
     tz = ZoneInfo("Africa/Cairo")
     at = post_time(dt.datetime(2026, 10, 28, 20, 44, tzinfo=tz).timestamp(), tz)
-    assert (at.hour, at.minute) == (21, 23) and when_text(at) == "الساعة ٩ بالليل"
+    assert (at.hour, at.minute) == (21, 0) and when_text(at) == "الساعة ٩ بالليل"
     at = post_time(dt.datetime(2026, 10, 29, 16, 10, tzinfo=tz).timestamp(), tz)
-    assert when_text(at) == "الساعة ٤ العصر"
+    assert when_text(at) == "الساعة ٥ العصر"
+
+
+def test_slots_are_whole_hours():
+    import datetime as dt
+    import random
+    from zoneinfo import ZoneInfo
+    from src.main import plan_slots
+    tz = ZoneInfo("Africa/Cairo")
+    for seed in range(30):
+        for ts in plan_slots(dt.date(2026, 11, 2), 2, [(900, 1020), (1200, 1350)], tz, random.Random(seed)):
+            t = dt.datetime.fromtimestamp(ts, tz)
+            assert t.minute == 0 and t.hour in (15, 16, 20, 21, 22)
