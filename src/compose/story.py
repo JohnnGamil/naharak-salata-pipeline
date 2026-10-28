@@ -1,9 +1,8 @@
 """Countdown story before the next series part (John, 2026-10-28: "a story 2 hours before part 2").
 
 About two hours before a series part is due, an Instagram story and a Facebook Page story go up: the
-last moment of the previous part with "الجزء التاني الساعة 9 بالليل - مين مستني؟". The picture is the
-previous part's last frame (from the weekly archive on R2), or the new part's cover when that copy is
-gone. Story stickers (polls, links) are not offered by the APIs, so the story is a plain picture.
+last moment of the previous part with "الجزء التاني الساعة 9 بالليل - مين مستني؟". The picture is a
+clean scene picture of the new part (no captions, no band: John, 2026-10-28). Story stickers (polls, links) are not offered by the APIs, so the story is a plain picture.
 """
 from __future__ import annotations
 
@@ -57,35 +56,22 @@ def render(picture: Path, lines: list[str], out: Path) -> Path:
     """1080x1920 jpg: the picture filled to the frame, darker at the bottom, two lines of text."""
     ass = _ass(lines, out.with_suffix(".ass"))
     vf = ("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
-          "drawbox=x=0:y=1180:w=1080:h=740:color=0x111111@1:t=fill,"  # hides the frame's own captions
           f"ass=filename='{ff_path(ass)}':fontsdir='{ff_path(FONTS_DIR)}'")
     run(["ffmpeg", "-y", "-v", "error", "-i", str(picture), "-vf", vf, "-frames:v", "1", "-q:v", "2", str(out)])
     return out
 
 
-def _last_frame(video: Path, out: Path) -> Path:
-    t = max(0.0, ffprobe_duration(video) - 1.2)
-    run(["ffmpeg", "-y", "-v", "error", "-ss", f"{t:.2f}", "-i", str(video), "-frames:v", "1", "-q:v", "2", str(out)])
-    return out
+def _clean_picture(jd: Path, last: bool) -> Path | None:
+    """A scene picture without any writing on it (the video frames carry the captions)."""
+    scenes = sorted((jd / "images").glob("scene_*.jpg"))
+    if scenes:
+        return scenes[-1] if last else scenes[0]
+    return next((jd / n for n in ("cover_art.jpg",) if (jd / n).exists()), None)
 
 
 def _picture(pipe, prev: dict, nxt: dict, work: Path) -> Path | None:
-    """The previous part's last frame from the R2 archive, else the new part's cover."""
-    for row in pipe.db.q("SELECT value FROM kv WHERE key LIKE 'week:%'"):
-        for item in json.loads(row["value"]):
-            if item.get("job") == prev["id"]:
-                try:
-                    resp = httpx.get(r2.presign(pipe.s, "GET", item["key"]), timeout=300)
-                    if resp.status_code == 200:
-                        (work / "prev.mp4").write_bytes(resp.content)
-                        return _last_frame(work / "prev.mp4", work / "prev.jpg")
-                except httpx.HTTPError as e:
-                    log.warning("story: archive copy unreachable: %s", e)
-    for name in ("cover_art.jpg", "cover.jpg"):
-        f = pipe.job_dir(nxt["id"]) / name
-        if f.exists():
-            return f
-    return None
+    """A clean scene picture of the new part (John: no frame with captions, no black band)."""
+    return _clean_picture(pipe.job_dir(nxt["id"]), last=False)
 
 
 def _instagram(pipe, image_url: str) -> str:
@@ -280,7 +266,6 @@ def vote_card(picture: Path, question: str, options: list[str], out: Path) -> Pa
     ass.write_text(head + "".join(f"Dialogue: 0,0:00:00.00,0:00:05.00,{st},,0,0,0,,{tx}\n" for st, tx in ev),
                    encoding="utf-8")
     vf = ("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
-          "drawbox=x=0:y=1080:w=1080:h=840:color=0x111111@1:t=fill,"
           f"ass=filename='{ff_path(ass)}':fontsdir='{ff_path(FONTS_DIR)}'")
     run(["ffmpeg", "-y", "-v", "error", "-i", str(picture), "-vf", vf, "-frames:v", "1", "-q:v", "2", str(out)])
     return out
@@ -291,7 +276,7 @@ def vote_story(pipe, job: dict, story) -> bool:
     if not story.vote or not pipe.s.upload_enabled or not r2.enabled(pipe.s):
         return False
     jd = pipe.job_dir(job["id"])
-    pic = next((jd / n for n in ("cover_art.jpg", "cover.jpg") if (jd / n).exists()), None)
+    pic = _clean_picture(jd, last=True)  # the cliffhanger scene, no writing on it
     if pic is None:
         return False
     work = pipe.s.data_dir / "stories" / str(job["id"])
