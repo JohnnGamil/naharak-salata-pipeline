@@ -424,5 +424,7 @@ class Pipeline:
             row = self.db.post(job["id"], p)
             mark = {"DONE": "✅", "RETRY": "🔁", "FAILED": "❌"}[r]
             lines.append(f"{mark} {p}" + (f": {row['url']}" if r == "DONE" and row["url"] else ""))
+        if results.get("instagram") == "DONE":  # the APIs can't make a tappable story: 10 s by hand
+            lines.append("📲 عايز ستوري بتودي للريل؟ افتح لينك الإنستجرام من الموبايل ← ✈️ ← Add to story")
         self.tg.send(f"📤 {story.title}\n" + "\n".join(lines))
         return job["id"]
