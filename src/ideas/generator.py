@@ -192,8 +192,12 @@ def season_hint(today: dt.date | None = None) -> str:
     return f"{d:%B %Y}: {notes}. Ramadan ~ Feb, Eid al-Adha ~ May/June (only light, non-religious jokes)."
 
 
-def pick_format(recent: list[str]) -> str:
-    """Rotate: the format used least recently (never used first)."""
+def pick_format(recent: list[str], weights: dict[str, float] | None = None) -> str:
+    """Rotate: the format used least recently (never used first). With the 2-weekly review's weights
+    the formats our viewers watch most come round more often (a weighted draw by age x weight)."""
+    if weights:
+        age = {f: min(recent.index(f) if f in recent else len(FORMATS), len(FORMATS)) + 1 for f in FORMATS}
+        return random.choices(FORMATS, [(age[f] * weights.get(f, 1.0)) ** 2 for f in FORMATS])[0]
     order = {f: (recent.index(f) if f in recent else 999) for f in FORMATS}
     best = max(order.values())
     return random.choice([f for f, i in order.items() if i == best])
@@ -219,6 +223,10 @@ class IdeaGenerator:
         kind = ("A 3-part mini-series, our BIG show: drama, action and (cartoon, no-hitting) fights with huge "
                 "stakes for tiny vegetables, and killer cliffhangers after parts 1 and 2. Genre for this series: "
                 + random.choice(SERIES_GENRES) if series else "One standalone 30-60 second video.")
+        loved = self.db.get("what_worked") or []
+        if loved:  # from the 2-weekly views review
+            kind += (" Our audience LOVED these recent videos (learn what made them work, never copy them): "
+                     + "; ".join(loved[:5]) + ".")
         if not series:  # standalones ride today's trend when there is a safe one
             from .trends import todays_trend
             tr = todays_trend(self.llm, self.db)
@@ -268,7 +276,7 @@ class IdeaGenerator:
     def generate_series(self) -> tuple[str, list[Story]] | None:
         """A 3-part mini-series in one LLM call (so the parts stay consistent). None = no LLM."""
         recent = self.db.recent_titles(50)
-        fmt = pick_format(self.db.recent_formats(len(FORMATS)))
+        fmt = pick_format(self.db.recent_formats(len(FORMATS)), self.db.get("format_weights"))
         prompt = self._prompt(fmt, recent, SERIES_TASK, self.best_premise(fmt, recent, True))
         feedback = ""
         for attempt in range(1, self.max_attempts + 1):
@@ -297,7 +305,7 @@ class IdeaGenerator:
 
     def generate(self) -> Story:
         recent = self.db.recent_titles(50)
-        fmt = pick_format(self.db.recent_formats(len(FORMATS)))
+        fmt = pick_format(self.db.recent_formats(len(FORMATS)), self.db.get("format_weights"))
         prompt = self._prompt(fmt, recent, SINGLE_TASK, self.best_premise(fmt, recent, False))
         feedback = ""
         for attempt in range(1, self.max_attempts + 1):

@@ -25,7 +25,8 @@ log = logging.getLogger(__name__)
 
 GRAPH = "https://graph.instagram.com"
 AUTH_URL = "https://www.instagram.com/oauth/authorize"
-SCOPES = "instagram_business_basic,instagram_business_content_publish"
+SCOPES = ("instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments,"
+          "instagram_business_manage_insights")  # comments: viewers' votes; insights: the 2-weekly views review
 TOKEN_KEY = "instagram_tokens"
 
 

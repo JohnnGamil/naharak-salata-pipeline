@@ -78,6 +78,11 @@ def run(budget_min: float, s, who: str) -> None:
         post_and_save()  # a slot may fall due while a long video is being made
     post_and_save()
     try:
+        from .ideas.review import maybe_review
+        try:
+            maybe_review(app.pipe)
+        except Exception:  # noqa: BLE001 - a review never stops posting
+            log.exception("views review failed")
         from .compose.weekly import maybe_post_weekly
         if maybe_post_weekly(app.pipe):
             state_sync.push(s)

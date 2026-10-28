@@ -13,7 +13,7 @@ import pytest
 from src.db import DB
 from src.ideas.generator import IdeaGenerator, pick_format
 from src.ideas.offline_bank import SKITS
-from src.ideas.schema import Story
+from src.ideas.schema import FORMATS, Story
 from src.llm import LLMUnavailable, extract_json
 from src.compose import subtitles
 from src.qa.audio_check import normalize_ar, similarity
@@ -594,3 +594,16 @@ def test_proofread_fixes_small_mistakes_and_refuses_rewrites():
     out = proofread(One(), [st])[0]
     assert out.caption_ar == st.caption_ar + "!"
     assert out.scenes[0].line_ar == line0  # too different -> refused
+
+
+def test_review_weights_and_weighted_format_pick():
+    from src.ideas.review import report, weights
+    from src.ideas.generator import pick_format
+    rows = [{"title": f"t{i}", "format": f, "series": i % 2 == 0, "views": v, "likes": 1, "comments": 0}
+            for i, (f, v) in enumerate([(FORMATS[0], 9000), (FORMATS[0], 7000), (FORMATS[1], 100),
+                                        (FORMATS[1], 300), (FORMATS[2], 1000)])]
+    w = weights(rows)
+    assert w[FORMATS[0]] == 2.0 and w[FORMATS[1]] == 0.5 and FORMATS[2] not in w  # one video: no verdict
+    assert "مراجعة" in report(rows, w)
+    picks = [pick_format([], w) for _ in range(400)]
+    assert picks.count(FORMATS[0]) > picks.count(FORMATS[1]) * 4
