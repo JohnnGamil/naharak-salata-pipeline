@@ -150,7 +150,8 @@ def maybe_countdown(pipe, tz, now: float | None = None) -> bool:
         except Exception as e:  # noqa: BLE001 - one platform failing never blocks the other
             log.warning("story on %s failed: %s", name, e)
     pipe.tg.send_photo(img, f"⏰ ستوري العد التنازلي نزلت على {' و '.join(done) or 'ولا حتة (فشلت)'}:\n"
-                            f"{lines[0]} - {lines[1]}\n«{nxt.get('series_title') or nxt['title']}»")
+                            f"{lines[0]} - {lines[1]}\n«{nxt.get('series_title') or nxt['title']}»"
+                            "\nلو عايز: نزّلها ستوري على TikTok كمان")
     return bool(done)
 
 
@@ -243,8 +244,7 @@ def teaser(pipe, job: dict) -> bool:
         except Exception as e:  # noqa: BLE001
             log.warning("teaser story on %s failed: %s", name, e)
     pipe.tg.send_video(clip, f"📲 ستوري «الحلقة الجديدة نزلت» على {' و '.join(done) or 'ولا حتة (فشلت)'}"
-                             "
-لو عايز: نزّلها ستوري على TikTok كمان")
+                             "\nلو عايز: نزّلها ستوري على TikTok كمان")
     return bool(done)
 
 
@@ -293,6 +293,5 @@ def vote_story(pipe, job: dict, story) -> bool:
         except Exception as e:  # noqa: BLE001
             log.warning("vote story on %s failed: %s", name, e)
     pipe.tg.send_photo(img, f"🗳️ ستوري التصويت نزلت على {' و '.join(done) or 'ولا حتة (فشلت)'}"
-                            "
-لو عايز: نزّلها ستوري على TikTok كمان")
+                            "\nلو عايز: نزّلها ستوري على TikTok كمان")
     return bool(done)
