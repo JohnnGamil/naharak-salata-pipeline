@@ -414,8 +414,9 @@ class Pipeline:
         except Exception:
             log.exception("weekly archive of job %d failed", job["id"])
         try:  # "the new episode is out" story on Instagram + Facebook
-            from .compose.story import teaser
+            from .compose.story import teaser, vote_story
             teaser(self, self.db.job(job["id"]))
+            vote_story(self, self.db.job(job["id"]), story)
         except Exception:
             log.exception("teaser story of job %d failed", job["id"])
         lines = []

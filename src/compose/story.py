@@ -258,3 +258,52 @@ def teaser(pipe, job: dict) -> bool:
             log.warning("teaser story on %s failed: %s", name, e)
     pipe.tg.send(f"📲 ستوري «الحلقة الجديدة نزلت» على {' و '.join(done) or 'ولا حتة (فشلت)'}")
     return bool(done)
+
+
+# --- vote card with series part 1 (John, 2026-10-28) ----------------------------------------------
+
+def vote_card(picture: Path, question: str, options: list[str], out: Path) -> Path:
+    """Story picture: the cover with the question and the two numbered choices, sending people to
+    the reel's comments (the APIs offer no poll sticker)."""
+    ass = out.with_suffix(".ass")
+    head = ("[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\n\n"
+            "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
+            "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, "
+            "Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+            f"Style: Q,{CAPTION_FONT},92,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,1,0,0,0,100,100,0,0,1,6,3,2,60,60,560,1\n"
+            f"Style: A,{CAPTION_FONT},84,&H00FFFFFF,&H00FFFFFF,&H00B5641E,&H96000000,1,0,0,0,100,100,0,0,3,16,0,2,60,60,400,1\n"
+            f"Style: B,{CAPTION_FONT},84,&H00FFFFFF,&H00FFFFFF,&H001E7DE6,&H96000000,1,0,0,0,100,100,0,0,3,16,0,2,60,60,260,1\n"
+            f"Style: C,{CAPTION_FONT},66,&H0000D7FF,&H0000D7FF,&H00000000,&H96000000,1,0,0,0,100,100,0,0,1,5,2,2,60,60,120,1\n\n"
+            "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
+    ev = [("Q", question), ("A", f"اكتب ١ لو {options[0]}"), ("B", f"اكتب ٢ لو {options[1]}"),
+          ("C", "في كومنتات الريل")]
+    ass.write_text(head + "".join(f"Dialogue: 0,0:00:00.00,0:00:05.00,{st},,0,0,0,,{tx}\n" for st, tx in ev),
+                   encoding="utf-8")
+    vf = ("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
+          "drawbox=x=0:y=1080:w=1080:h=840:color=0x111111@1:t=fill,"
+          f"ass=filename='{ff_path(ass)}':fontsdir='{ff_path(FONTS_DIR)}'")
+    run(["ffmpeg", "-y", "-v", "error", "-i", str(picture), "-vf", vf, "-frames:v", "1", "-q:v", "2", str(out)])
+    return out
+
+
+def vote_story(pipe, job: dict, story) -> bool:
+    """With a series part that asks the viewers to vote: the vote card as a story too."""
+    if not story.vote or not pipe.s.upload_enabled or not r2.enabled(pipe.s):
+        return False
+    jd = pipe.job_dir(job["id"])
+    pic = next((jd / n for n in ("cover_art.jpg", "cover.jpg") if (jd / n).exists()), None)
+    if pic is None:
+        return False
+    work = pipe.s.data_dir / "stories" / str(job["id"])
+    work.mkdir(parents=True, exist_ok=True)
+    img = vote_card(pic, story.vote["question_ar"], story.vote["options"], work / "vote.jpg")
+    url = r2.put_public(pipe.s, img, f"stories/{job['id']:05d}_vote.jpg", "image/jpeg")
+    done = []
+    for name, fn in (("Instagram", _instagram), ("Facebook", _facebook)):
+        try:
+            fn(pipe, url)
+            done.append(name)
+        except Exception as e:  # noqa: BLE001
+            log.warning("vote story on %s failed: %s", name, e)
+    pipe.tg.send_photo(img, f"🗳️ ستوري التصويت نزلت على {' و '.join(done) or 'ولا حتة (فشلت)'}")
+    return bool(done)
