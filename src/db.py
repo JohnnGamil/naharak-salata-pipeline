@@ -194,8 +194,9 @@ class DB:
 
     def posts_to_retry(self, max_attempts: int, since_ts: float) -> list[dict]:
         return [dict(r) for r in self.q(
-            "SELECT * FROM posts WHERE status='RETRY' AND attempts<? AND updated_at>=? ORDER BY job_id",
-            (max_attempts, since_ts))]
+            "SELECT * FROM posts WHERE status='RETRY' AND updated_at>=? AND (attempts<? OR error LIKE "
+            "'%API access blocked%' OR error LIKE '%Cannot call API for app%') ORDER BY job_id",
+            (since_ts, max_attempts))]  # a Meta account lock retries until John confirms
 
     # --- characters -------------------------------------------------------
     def characters(self) -> list[dict]:

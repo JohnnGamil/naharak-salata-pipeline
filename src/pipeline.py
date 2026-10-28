@@ -361,14 +361,23 @@ class Pipeline:
                 res = up.upload(video, self.caption(job, story, self.s.channel_name, platform))
         except Exception as e:
             retry = getattr(e, "retryable", True)
+            meta_lock = platform in ("instagram", "facebook") and any(
+                k in str(e) for k in ("API access blocked", "Cannot call API for app"))
+            if meta_lock:  # Meta paused the developer account (2026-10-28): John confirms, we post again
+                retry = True
+                self.tg.send("🔒 Meta وقفت التطبيق مؤقتًا، فالفيديو منزلش على Instagram و Facebook.\n"
+                             "افتح developers.facebook.com من الموبايل أو الكمبيوتر واعمل Confirm Account.\n"
+                             "بعدها الفيديو هينزل لوحده في التشغيلة الجاية.",
+                             throttle_key="meta_lock", throttle_s=6 * 3600)
             prev = self.db.post(job["id"], platform)
             attempts = (prev["attempts"] if prev else 0) + 1
-            status = "RETRY" if retry and attempts < self.POST_MAX_ATTEMPTS else "FAILED"
+            status = "RETRY" if meta_lock or (retry and attempts < self.POST_MAX_ATTEMPTS) else "FAILED"
             log.error("%s upload of job %d failed (%s): %s", platform, job["id"], status, e)
             self.db.record_post(job["id"], platform, status, error=str(e)[:2000])
             key = f"{platform}_token" if not retry else f"{platform}_err"
             prefix = f"🔑 {platform} needs a person" if not retry else f"⚠️ {platform} upload failed"
-            self.tg.send(f"{prefix}: {e}"[:900], throttle_key=key, throttle_s=3600)
+            if not meta_lock:
+                self.tg.send(f"{prefix}: {e}"[:900], throttle_key=key, throttle_s=3600)
             return status
         self.db.record_post(job["id"], platform, "DONE", publish_id=res.publish_id, url=res.url)
         return "DONE"
