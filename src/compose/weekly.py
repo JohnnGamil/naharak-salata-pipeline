@@ -38,7 +38,7 @@ def _prefix(s, week: str) -> str:
 
 def archive(pipe, job: dict, story) -> None:
     s = pipe.s
-    if not r2.enabled(s):
+    if not r2.enabled(s) or not s.upload_enabled:  # dry runs post nothing, so nothing to collect
         return
     video = Path(job["video_path"])
     if not video.exists():
