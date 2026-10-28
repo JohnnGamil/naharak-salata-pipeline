@@ -120,6 +120,19 @@ class Story(BaseModel):
     scenes: list[Scene] = Field(min_length=3, max_length=8)
     caption_ar: str = Field(min_length=2, max_length=1500)
     hashtags: list[str] = Field(default_factory=list, max_length=12)
+    # series part 1 only: {"question_ar": "...", "options": ["...", "..."]} - viewers pick part 2 (vote.py)
+    vote: dict | None = None
+
+    @field_validator("vote")
+    @classmethod
+    def vote_ok(cls, v):
+        if v is None:
+            return None
+        opts = [str(o).strip() for o in (v.get("options") or [])][:2]
+        q = str(v.get("question_ar") or "").strip()
+        if len(opts) != 2 or not all(opts) or not q:
+            return None  # a broken vote is dropped, never a reason to reject the story
+        return {"question_ar": q, "options": opts}
 
     @field_validator("format")
     @classmethod

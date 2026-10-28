@@ -45,7 +45,7 @@ Write ONE new skit that BOTH kids and adults enjoy (think Pixar / Bakkar / Bougy
 - {min_s}-{max_s} scenes. Total words across all line_ar between {min_w} and {max_w} (30-60 seconds of speech).
 - One speaking character per scene. 1-3 characters, mostly from the MAIN CAST below; at most one guest.
   Use each character's catchphrase about once when it fits. First scene must be a strong hook.
-  Last scene: a punchline or a call to comment/follow.
+  Last scene: see the ending rules at the end (loop for a single video, cliffhanger for a series).
 - Each character gets a voice: "ar-EG-ShakirNeural" (male) or "ar-EG-SalmaNeural" (female).
 - character "look": copy the cast's look; for a brand-new character write an English visual description
   (cute 3D cartoon fruit/vegetable with a face).
@@ -75,7 +75,15 @@ STORY_SHAPE = """{{"title": "...", "format": "{fmt}",
  "scenes": [{{"character_id": "tomato", "line_ar": "...", "visual_prompt_en": "...", "emotion": "angry"}}],
  "caption_ar": "...", "hashtags": ["..."]}}"""
 
-SINGLE_TASK = "Return ONLY JSON in exactly this shape:\n" + STORY_SHAPE
+SINGLE_TASK = """LOOP ENDING (this video replays automatically on TikTok/Reels/Shorts; a seamless loop makes
+people watch it twice without noticing - the strongest signal for the algorithm):
+- The LAST line must flow straight back into the FIRST line, as if the video never ended. Write the last
+  line as a set-up that the first line answers or continues, e.g. last: "...ومن ساعتها كل ما حد يفتح التلاجة
+  بيسمع صوت بيقول" -> first: "مين اللي كل الجبنة؟!". Or the last line starts the same situation again.
+- No goodbye, no "follow us", no question to the viewers in the last line (it breaks the loop); the comment
+  question goes in caption_ar instead. Don't end on a full stop of the story - end mid-flow.
+Return ONLY JSON in exactly this shape:
+""" + STORY_SHAPE
 
 SERIES_TASK = """This time write a MINI-SERIES of exactly 3 parts (3 separate videos posted one after another).
 - This is our BIG show: big emotions, DRAMA, ACTION and FIGHTS like a Pixar movie or a Ramadan series -
@@ -92,6 +100,10 @@ SERIES_TASK = """This time write a MINI-SERIES of exactly 3 parts (3 separate vi
   twist, then a short emotional or hilarious payoff. Each part escalates.
 - A catchphrase appears AT MOST ONCE per part (never at the start of every line). Characters talk like real
   people reacting to each other, not like they're reading their slogan.
+- VIEWERS DECIDE: part 1 gets a "vote" field: {{"question_ar": "a short Egyptian question", "options":
+  ["choice 1", "choice 2"]}} - a real fork in the story (who is the traitor? which plan do they try? who
+  goes into the freezer?). Both choices must lead somewhere fun. Write parts 2 and 3 as if choice 1 wins
+  (they are rewritten later if choice 2 wins). Parts 2 and 3 have no "vote".
 - Each part must still be funny on its own (someone who only sees one part still laughs).
 - EACH part is a full video on its own: 5-7 scenes and at least 85 words of dialogue PER PART
   (short parts get rejected). Every part follows ALL the rules above (language etc.) and keeps the same
@@ -205,6 +217,13 @@ class IdeaGenerator:
         kind = ("A 3-part mini-series, our BIG show: drama, action and (cartoon, no-hitting) fights with huge "
                 "stakes for tiny vegetables, and killer cliffhangers after parts 1 and 2. Genre for this series: "
                 + random.choice(SERIES_GENRES) if series else "One standalone 30-60 second video.")
+        if not series:  # standalones ride today's trend when there is a safe one
+            from .trends import todays_trend
+            tr = todays_trend(self.llm, self.db)
+            if tr:
+                kind += (f" TODAY'S TREND in Egypt: {tr['topic_en']} (people are searching '{tr['trend']}'). "
+                         f"Possible angle: {tr['angle']}. At least 5 of the 10 premises must be about this "
+                         "trend (never about a real person). The video posts today, so it must feel like today.")
         try:
             raw = self.llm.text(BRAINSTORM.format(fmt=fmt, kind=kind, season=season_hint(),
                                                   bible=cast.bible_text(), recent="; ".join(recent[:30]) or "none"),

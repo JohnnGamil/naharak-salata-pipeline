@@ -91,9 +91,9 @@ class YouTubeUploader(Uploader):
 
     @staticmethod
     def metadata(title: str, description: str, tags: list[str], privacy: str, made_for_kids: bool,
-                 category: str) -> dict:
+                 category: str, short: bool = True) -> dict:
         title = " ".join(title.replace("<", "").replace(">", "").split())
-        if "#shorts" not in title.lower():
+        if short and "#shorts" not in title.lower():
             title = f"{title} #Shorts"
         return {
             "snippet": {"title": title[:100], "description": description[:4900],
@@ -112,9 +112,9 @@ class YouTubeUploader(Uploader):
             raise UploadError(f"YouTube thumbnail {r.status_code}: {r.text[:300]}", retryable=r.status_code >= 500)
 
     def upload(self, video: Path, caption: str, title: str = "", tags: list[str] | None = None,
-               cover: Path | None = None) -> UploadResult:
+               cover: Path | None = None, short: bool = True) -> UploadResult:
         meta = self.metadata(title or caption.splitlines()[0], caption, tags or [], self.privacy,
-                             self.made_for_kids, self.category)
+                             self.made_for_kids, self.category, short)
         size = video.stat().st_size
         r = httpx.post(f"{UPLOAD_URL}?uploadType=resumable&part=snippet,status",
                        headers={**self._headers(), "Content-Type": "application/json; charset=UTF-8",

@@ -73,6 +73,12 @@ def run(budget_min: float, s, who: str) -> None:
         state_sync.push(s)  # keep finished stages even if the runner is stopped
         post_and_save()  # a slot may fall due while a long video is being made
     post_and_save()
+    try:
+        from .compose.weekly import maybe_post_weekly
+        if maybe_post_weekly(app.pipe):
+            state_sync.push(s)
+    except Exception:
+        log.exception("weekly video failed")
     app.health()
 
 

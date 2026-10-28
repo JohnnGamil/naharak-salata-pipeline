@@ -56,6 +56,17 @@ def fit_clip(src: Path, duration: float, out: Path, preset: str = "veryfast") ->
     return out
 
 
+def trailing_silence(wav_path: str, thresh: float = 0.02) -> float:
+    """Seconds of near-silence at the end of a voice file."""
+    with wave.open(wav_path) as wf:
+        rate, ch = wf.getframerate(), wf.getnchannels()
+        x = np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16).astype(np.float32) / 32768
+    if ch > 1:
+        x = x.reshape(-1, ch)[:, 0]
+    loud = np.nonzero(np.abs(x) > thresh)[0]
+    return (len(x) - (loud[-1] + 1)) / rate if loud.size else 0.0
+
+
 def build_voice(audio: list[dict], seg_durations: list[float], out: Path, sr: int = 44100) -> Path:
     """Concatenate scene wavs, each padded/trimmed to its video segment length (keeps sync exact)."""
     parts = []
@@ -86,13 +97,15 @@ def pick_music(fmt: str) -> Path | None:
 
 
 def compose(story, audio: list[dict], clips: list[Path], job_dir: Path, preset: str = "veryfast",
-            hook: bool = False, outro: dict | None = None) -> Path:  # hook: title overlay off (John)
+            hook: bool = False, outro: dict | None = None, loop: bool = False) -> Path:  # hook: title overlay off (John)
     lines = [sc.line_ar for sc in story.scenes]
     if outro:  # "follow for the next part": one more segment on the last scene's picture
         audio, clips, lines = [*audio, outro], [*clips, clips[-1]], [*lines, outro["text"]]
     work = job_dir / "compose"
     work.mkdir(parents=True, exist_ok=True)
     seg_durs = [n_frames(a["duration"]) / FPS for a in audio]
+    if loop:  # end right on the last word, so the replay starts with no gap (rewatch loop)
+        seg_durs[-1] = max(0.5, n_frames(max(0.3, seg_durs[-1] - trailing_silence(audio[-1]["wav"]) + 0.06)) / FPS)
     segs = [fit_clip(c, d, work / f"seg_{i:02d}.mp4", preset) for i, (c, d) in enumerate(zip(clips, seg_durs))]
     listing = work / "concat.txt"
     listing.write_text("".join(f"file '{s.resolve().as_posix()}'\n" for s in segs), encoding="utf-8")

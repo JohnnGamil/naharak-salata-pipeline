@@ -34,7 +34,7 @@ from .upload.youtube_api import TOKEN_KEY as YT_TOKEN_KEY, YouTubeTokens, YouTub
 from .video.base import EngineUnavailable, QuotaWait, SceneSpec
 from .video.fallback_engine import FallbackEngine
 from .video.kaggle_engine import KaggleEngine
-from .voice.tts import synth_outro, synthesize_story
+from .voice.tts import OUTRO_TEXT, synth_outro, synthesize_story
 
 log = logging.getLogger(__name__)
 
@@ -88,7 +88,9 @@ class Pipeline:
         synthesize_story(story, jd, settings=self.s)
         job = self.db.job(job_id)
         if job.get("series_id") and (job.get("part") or 0) < (job.get("parts") or 0):
-            self._write(jd / "audio" / "outro.json", synth_outro(story, jd / "audio", self.s))
+            text = ("اكتبولنا في الكومنتات: واحد ولا اتنين؟ وتابعونا عشان تشوفوا اللي هيحصل"
+                    if story.vote else OUTRO_TEXT)
+            self._write(jd / "audio" / "outro.json", synth_outro(story, jd / "audio", self.s, text))
         self.db.set_status(job_id, "AUDIO")
 
     def _specs(self, job_id: int) -> list[SceneSpec]:
@@ -139,7 +141,8 @@ class Pipeline:
         audio = self._read(jd / "audio" / "audio.json")
         outro_f = jd / "audio" / "outro.json"
         outro = self._read(outro_f) if outro_f.exists() else None
-        final = compose(self.story(job_id), audio, clips, jd, outro=outro)
+        loop = not self.db.job(job_id).get("series_id")  # standalones loop; series parts end on the cliffhanger
+        final = compose(self.story(job_id), audio, clips, jd, outro=outro, loop=loop)
         try:  # designed cover for the platforms that take one; a failure never blocks the video
             cover_for_job(self.db.job(job_id), self.story(job_id), jd, self.s.channel_name, self.s)
         except Exception:
@@ -233,7 +236,8 @@ class Pipeline:
     def plan_next(self) -> int:
         """New work: a 3-part series every (standalone_between_series + 1) videos, else one episode."""
         since = int(self.db.get("standalone_since_series", 99))
-        if self.s.series_enabled and since >= self.s.standalone_between_series:
+        running = any(j.get("series_id") for j in self.db.unfinished_jobs())  # parts waiting for a vote
+        if self.s.series_enabled and since >= self.s.standalone_between_series and not running:
             got = self.ideas.generate_series()
             if got:
                 title, stories = got
@@ -253,7 +257,8 @@ class Pipeline:
 
     def produce_one(self) -> int:
         """Resume the oldest unfinished job, or start new work. Returns the job id."""
-        pending = self.db.unfinished_jobs()
+        from .ideas.vote import gate
+        pending = [j for j in self.db.unfinished_jobs() if not gate(self, j)]
         job_id = pending[0]["id"] if pending else self.plan_next()
         status = self.run_job(job_id)
         log.info("job %d finished as %s", job_id, status)
@@ -316,6 +321,10 @@ class Pipeline:
             # Gemini's caption often says "تابعوا" already: don't say it twice
             follow = ("\nتابعونا عشان الجزء الجاي 👀" if job["part"] < job["parts"] and "تابع" not in text
                       else "")
+            if getattr(story, "vote", None):
+                o = story.vote["options"]
+                follow += (f"\n\n🗳️ {story.vote['question_ar']}\nاكتب 1 لو {o[0]} و 2 لو {o[1]} 👇"
+                           "\nاللي ياخد أصوات أكتر هو اللي هيحصل في الجزء الجاي!")
             text = f"{head}\n{text}{follow}"
         return f"{text}\n\n{tags}".strip()[:2200]
 
@@ -397,6 +406,11 @@ class Pipeline:
         first = next(self.db.post(job["id"], p) for p, r in results.items() if r == "DONE")
         self.db.set_status(job["id"], "UPLOADED", publish_id=first["publish_id"], post_url=first["url"],
                            uploaded_at=time.time())
+        try:  # keep a copy for the weekly long YouTube video
+            from .compose.weekly import archive
+            archive(self, job, story)
+        except Exception:
+            log.exception("weekly archive of job %d failed", job["id"])
         lines = []
         for p, r in results.items():
             row = self.db.post(job["id"], p)

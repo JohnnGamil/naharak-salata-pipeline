@@ -410,6 +410,13 @@ class FakeUp:
 
 
 @pytest.fixture(autouse=True)
+def _no_trend_feed(monkeypatch):
+    """No network in tests: no trend of the day."""
+    import src.ideas.trends as tr
+    monkeypatch.setattr(tr, "todays_trend", lambda llm, db, today=None: None)
+
+
+@pytest.fixture(autouse=True)
 def _no_ffmpeg_cover_intro(monkeypatch):
     """Upload tests use fake mp4 bytes: skip the real ffmpeg cover-intro render."""
     import shutil
@@ -515,3 +522,49 @@ def test_no_cover_no_post(tmp_path, monkeypatch):
     (tmp_path / "cover.jpg").unlink()
     assert p.upload_next() is None and up.calls == 0
     assert db.post(jid, "instagram")["status"] == "RETRY"
+
+
+def test_vote_reads_1_2_in_any_form():
+    from src.ideas.vote import choice_of
+    opts = ["الطماطم", "الخيارة"]
+    assert choice_of("1", opts) == 0 and choice_of("٢ طبعا", opts) == 1
+    assert choice_of("أكيد الخيارة 😂", opts) == 1 and choice_of("واحد", opts) == 0
+    assert choice_of("1 و 2", opts) is None and choice_of("حلو اوي", opts) is None and choice_of("12", opts) is None
+
+
+def test_series_parts_wait_for_the_vote_then_follow_it(tmp_path, monkeypatch):
+    import time as _t
+    import src.ideas.vote as vote
+    from src.config import Settings
+    from src.pipeline import Pipeline
+    db = DB(tmp_path / "t.db")
+    p = Pipeline(Settings(data_dir=tmp_path), db)
+    sent = []
+    p.tg = type("T", (), {"send": lambda self, m, **k: sent.append(m)})()
+    base = Story.model_validate(SKITS[0])
+    p1 = base.model_copy(update={"vote": {"question_ar": "مين الخاين؟", "options": ["الطماطم", "الخيارة"]}})
+    ids = [db.new_job("fallback", status="UPLOADED" if k == 1 else "IDEA", title=f"p{k}",
+                      story_json=(p1 if k == 1 else base).model_dump_json(), series_id="s1",
+                      series_title="لغز", part=k, parts=3) for k in (1, 2, 3)]
+    db.update_job(ids[0], uploaded_at=_t.time())
+    assert vote.gate(p, db.job(ids[1]))  # just posted: wait for votes
+    db.update_job(ids[0], uploaded_at=_t.time() - 19 * 3600)
+    monkeypatch.setattr(vote, "tally", lambda pipe, job, story: [3, 9])
+    new = SKITS[1]
+    p.llm = type("L", (), {"text": lambda self, prompt, **k: json.dumps({"parts": [new, new]}, ensure_ascii=False)})()
+    assert not vote.gate(p, db.job(ids[1]))  # voting over: counted and rewritten
+    assert db.job(ids[1])["title"] == new["title"] and "الخيارة: 9" in sent[-1]
+    assert not vote.gate(p, db.job(ids[2]))  # only once
+    cap = Pipeline.caption(db.job(ids[0]), p1, "نهارك سلطة")
+    assert "اكتب 1 لو الطماطم و 2 لو الخيارة" in cap
+
+
+def test_weekly_week_runs_friday_evening_to_friday_evening():
+    import datetime as _dt
+    from src.compose.weekly import description, week_key
+    fri = _dt.datetime(2026, 10, 30, 17, 0)  # a Friday
+    assert week_key(fri) == "2026-10-30"
+    assert week_key(fri.replace(hour=19)) == "2026-11-06"  # after the compile: next week
+    assert week_key(_dt.datetime(2026, 11, 1, 12)) == "2026-11-06"  # Sunday
+    d = description([(0, "أ"), (41.5, "ب"), (83, "ج")], "نهارك سلطة")
+    assert "0:00 أ" in d and "0:41 ب" in d and "1:23 ج" in d
