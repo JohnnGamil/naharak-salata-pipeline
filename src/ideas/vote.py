@@ -1,10 +1,9 @@
 """Viewers choose what happens next (John, 2026-10-28: "so there is interaction").
 
 Part 1 of a series ends with a 2-way question ("اكتب 1 لو الطماطم و 2 لو الخيارة"). Parts 2 and 3
-are only made VOTE_HOURS after part 1 went out: the comments on YouTube and the Facebook Page are
+are only made VOTE_HOURS after part 1 went out: the comments on YouTube, the Facebook Page and Instagram are
 counted, then Gemini rewrites parts 2-3 so the winning choice is what happens, and part 2 opens by
-telling the viewers they chose it. Instagram comments need the instagram_business_manage_comments
-permission (not granted yet), TikTok has no comment API for us: those are not counted.
+telling the viewers they chose it. TikTok has no comment API for us: those are not counted.
 """
 from __future__ import annotations
 
@@ -63,6 +62,15 @@ def facebook_comments(page_token: str, video_id: str) -> list[str]:
     return [c.get("message", "") for c in r.json().get("data", [])]
 
 
+def instagram_comments(token: str, media_id: str, version: str) -> list[str]:
+    r = httpx.get(f"https://graph.instagram.com/{version}/{media_id}/comments", timeout=30,
+                  params={"fields": "text", "limit": 100, "access_token": token})
+    if r.status_code != 200:
+        log.warning("instagram comments %s: %s", r.status_code, r.text[:200])
+        return []
+    return [c.get("text", "") for c in r.json().get("data", [])]
+
+
 def tally(pipe, job: dict, story: Story) -> list[int]:
     """[votes for option 1, votes for option 2] over the platforms we can read."""
     counts = [0, 0]
@@ -84,6 +92,13 @@ def tally(pipe, job: dict, story: Story) -> list[int]:
             texts += facebook_comments(page["page_token"], vid)
         except Exception as e:  # noqa: BLE001
             log.warning("facebook votes skipped: %s", e)
+    ig = pipe.db.post(job["id"], "instagram")
+    ig_tok = (pipe.db.get("instagram_tokens") or {}).get("access_token")
+    if ig and ig["status"] == "DONE" and ig_tok and ig["publish_id"]:
+        try:
+            texts += instagram_comments(ig_tok, ig["publish_id"], pipe.s.instagram_api_version)
+        except Exception as e:  # noqa: BLE001
+            log.warning("instagram votes skipped: %s", e)
     for t in texts:
         c = choice_of(t, story.vote["options"])
         if c is not None:
