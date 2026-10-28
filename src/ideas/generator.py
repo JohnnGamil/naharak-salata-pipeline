@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from ..llm import LLM, LLMUnavailable, extract_json
 from . import cast
 from .offline_bank import SKITS
+from .proofread import proofread
 from .schema import FORMATS, MAX_WORDS, MIN_WORDS, VOICES, Story
 
 log = logging.getLogger(__name__)
@@ -283,6 +284,7 @@ class IdeaGenerator:
                         stories.append(self._apply_library(Story.model_validate(part)))
                     except ValidationError as e:
                         raise ValueError(f"part {k}: {e}") from e
+                stories = proofread(self.llm, stories)
                 title = str(data.get("series_title") or stories[0].title)[:80]
                 return title, stories
             except LLMUnavailable as e:
@@ -304,7 +306,7 @@ class IdeaGenerator:
                 story = Story.model_validate(extract_json(raw))
                 if story.title in recent:
                     raise ValueError("title repeats a recent video")
-                return self._apply_library(story)
+                return self._apply_library(proofread(self.llm, [story])[0])
             except LLMUnavailable as e:
                 log.warning("no LLM for ideas: %s", e)
                 break

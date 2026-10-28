@@ -135,6 +135,8 @@ def rewrite_rest(pipe, series_jobs: list[dict], counts: list[int]) -> bool:
             feedback = f"\n\nYour previous answer was rejected: {str(e)[:300]}\nFix it."
     else:
         return False
+    from .proofread import proofread
+    parts = proofread(pipe.llm, parts)
     for j, st in zip(rest, parts):
         st = pipe.ideas._apply_library(st)
         pipe.db.update_job(j["id"], story_json=st.model_dump_json(), title=st.title)

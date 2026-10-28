@@ -70,7 +70,7 @@ class FakeLLM:
         self.replies = list(replies)
 
     def text(self, prompt, json_mode=True, temperature=1.0):
-        if prompt.startswith(("You are the head writer", "You are a tough TikTok editor")):
+        if prompt.startswith(("You are the head writer", "You are a tough TikTok editor", "You are a strict proofreader")):
             raise LLMUnavailable("no brainstorm in tests")
         if not self.replies:
             raise LLMUnavailable("none left")
@@ -579,3 +579,18 @@ def test_caption_times_follow_the_heard_voice():
     assert abs(got[2]["start"] - 0.5) < 0.05 and abs(got[4]["start"] - 2.3) < 0.05
     assert all(a["start"] < b["start"] for a, b in zip(got, got[1:]))
     assert match("كلام تاني خالص", heard, 3.0) is None  # nothing matches -> keep the old timings
+
+
+def test_proofread_fixes_small_mistakes_and_refuses_rewrites():
+    from src.ideas.proofread import proofread
+    st = Story.model_validate(SKITS[0])
+    line0 = st.scenes[0].line_ar
+    reply = {"texts": [{"id": "0.title", "text": st.title}, {"id": "0.caption", "text": st.caption_ar + "!"},
+                       {"id": "0.line0", "text": "كلام مختلف خالص مالوش أي علاقة باللي فات ده خالص يعني"}]}
+
+    class One:
+        def text(self, prompt, json_mode=True, temperature=1.0):
+            return json.dumps(reply, ensure_ascii=False)
+    out = proofread(One(), [st])[0]
+    assert out.caption_ar == st.caption_ar + "!"
+    assert out.scenes[0].line_ar == line0  # too different -> refused

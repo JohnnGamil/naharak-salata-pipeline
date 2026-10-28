@@ -321,7 +321,7 @@ class Pipeline:
         if job.get("series_id"):
             head = f"{job.get('series_title') or ''} | الجزء {job['part']} من {job['parts']}".strip(" |")
             # Gemini's caption often says "تابعوا" already: don't say it twice
-            follow = ("\nتابعونا عشان الجزء الجاي 👀" if job["part"] < job["parts"] and "تابع" not in text
+            follow = ("\nتابعونا عشان الجزء الجاي 👀" if job["part"] < job["parts"] and not any(k in text for k in ("تابع", "استنو", "الجزء الجاي", "الجزء التالت", "الجزء التاني"))
                       else "")
             if getattr(story, "vote", None):
                 o = story.vote["options"]
