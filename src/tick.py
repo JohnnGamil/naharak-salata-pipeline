@@ -26,8 +26,9 @@ def _posted(app) -> int:
 
 def morning(app, who: str) -> None:
     """First run of the Cairo day: one Telegram line that the machine is alive + today's plan."""
-    today = dt.datetime.now(app.tz).date().isoformat()
-    if app.db.get("morning_msg_day") == today:
+    now = dt.datetime.now(app.tz)
+    today = now.date().isoformat()
+    if now.hour < 6 or app.db.get("morning_msg_day") == today:  # a late-night test run is not "the morning"
         return
     app.db.put("morning_msg_day", today)
     slots = app.db.q("SELECT due_ts FROM post_slots WHERE day=? ORDER BY due_ts", (today,))
