@@ -87,7 +87,9 @@ class Pipeline:
         story, jd = self.story(job_id), self.job_dir(job_id)
         synthesize_story(story, jd, settings=self.s)
         job = self.db.job(job_id)
-        if job.get("series_id") and (job.get("part") or 0) < (job.get("parts") or 0):
+        last = story.scenes[-1].line_ar
+        said = any(k in last for k in ("تابع", "الجزء التاني", "الجزء الجاي", "الحلقة الجاية"))  # never twice
+        if job.get("series_id") and (job.get("part") or 0) < (job.get("parts") or 0) and (story.vote or not said):
             text = ("اكتبولنا في الكومنتات: واحد ولا اتنين؟ وتابعونا عشان تشوفوا اللي هيحصل"
                     if story.vote else OUTRO_TEXT)
             self._write(jd / "audio" / "outro.json", synth_outro(story, jd / "audio", self.s, text))
@@ -142,7 +144,7 @@ class Pipeline:
         outro_f = jd / "audio" / "outro.json"
         outro = self._read(outro_f) if outro_f.exists() else None
         loop = not self.db.job(job_id).get("series_id")  # standalones loop; series parts end on the cliffhanger
-        final = compose(self.story(job_id), audio, clips, jd, outro=outro, loop=loop)
+        final = compose(self.story(job_id), audio, clips, jd, outro=outro, loop=loop, settings=self.s)
         try:  # designed cover for the platforms that take one; a failure never blocks the video
             cover_for_job(self.db.job(job_id), self.story(job_id), jd, self.s.channel_name, self.s)
         except Exception:

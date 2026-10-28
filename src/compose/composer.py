@@ -13,6 +13,7 @@ from ..config import FONTS_DIR, MUSIC_DIR
 from ..util import ff_path, ffprobe_duration, ffprobe_json, run
 from ..video.base import FPS, H, W
 from . import sfx
+from . import align
 from .subtitles import write_ass
 
 log = logging.getLogger(__name__)
@@ -97,7 +98,7 @@ def pick_music(fmt: str) -> Path | None:
 
 
 def compose(story, audio: list[dict], clips: list[Path], job_dir: Path, preset: str = "veryfast",
-            hook: bool = False, outro: dict | None = None, loop: bool = False) -> Path:  # hook: title overlay off (John)
+            hook: bool = False, outro: dict | None = None, loop: bool = False, settings=None) -> Path:  # hook: title overlay off (John)
     lines = [sc.line_ar for sc in story.scenes]
     if outro:  # "follow for the next part": one more segment on the last scene's picture
         audio, clips, lines = [*audio, outro], [*clips, clips[-1]], [*lines, outro["text"]]
@@ -118,7 +119,8 @@ def compose(story, audio: list[dict], clips: list[Path], job_dir: Path, preset: 
 
     sub_scenes, offset = [], 0.0
     for line, a, d in zip(lines, audio, seg_durs):
-        sub_scenes.append({"offset": offset, "duration": d, "line": line, "words": a["words"]})
+        words = align.aligned(a["wav"], line, d, a["words"], settings) if settings else a["words"]
+        sub_scenes.append({"offset": offset, "duration": d, "line": line, "words": words})
         offset += d
     total = offset
     ass = write_ass(sub_scenes, work / "subs.ass", hook=story.title if hook else None)

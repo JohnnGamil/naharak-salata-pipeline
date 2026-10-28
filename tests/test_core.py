@@ -568,3 +568,14 @@ def test_weekly_week_runs_friday_evening_to_friday_evening():
     assert week_key(_dt.datetime(2026, 11, 1, 12)) == "2026-11-06"  # Sunday
     d = description([(0, "أ"), (41.5, "ب"), (83, "ج")], "نهارك سلطة")
     assert "0:00 أ" in d and "0:41 ب" in d and "1:23 ج" in d
+
+
+def test_caption_times_follow_the_heard_voice():
+    from src.compose.align import match
+    heard = [{"text": "يانهر", "start": 0.0, "end": 0.4}, {"text": "اسود", "start": 0.5, "end": 0.9},
+             {"text": "الجبنى", "start": 2.3, "end": 2.7}]
+    got = match("يا نهار أسود قالب الجبنة", heard, 3.0)
+    assert [w["text"] for w in got] == ["يا", "نهار", "أسود", "قالب", "الجبنة"]
+    assert abs(got[2]["start"] - 0.5) < 0.05 and abs(got[4]["start"] - 2.3) < 0.05
+    assert all(a["start"] < b["start"] for a, b in zip(got, got[1:]))
+    assert match("كلام تاني خالص", heard, 3.0) is None  # nothing matches -> keep the old timings

@@ -36,9 +36,9 @@ def morning(app, who: str) -> None:
     ready = len(app.db.ready_jobs())
     making = app.db.unfinished_jobs()
     where = "GitHub" if who == "github" else "الكمبيوتر (GitHub واقف)"
-    event = os.environ.get("GITHUB_EVENT_NAME", "")
+    event = os.environ.get("TICK_SOURCE") or os.environ.get("GITHUB_EVENT_NAME", "")
     if who == "github":
-        where += " - اشتغل لوحده في ميعاده ✅" if event == "schedule" else " (تشغيل يدوي)"
+        where += " - اشتغل لوحده في ميعاده ✅" if event in ("schedule", "cron") else " (تشغيل يدوي)"
     app.tg.send(f"☀️ نهارك سلطة شغالة على {where}\n"
                 f"مواعيد النهارده: حوالي {times or '-'} (كل فيديو بينزل في خلال ساعة من ميعاده)\n"
                 f"فيديوهات جاهزة: {ready} | تحت التحضير: {len(making)}")
@@ -106,6 +106,10 @@ def main() -> int:
         ls = state_sync.lease(s)
         if ls.get("owner") == "pc" and ls.get("note") == "running" and time.time() - ls.get("ts", 0) < 3600:
             log.info("the PC backup is in the middle of a run - skipping this hour")
+            return 0
+        if (os.environ.get("TICK_SOURCE") == "schedule" and ls.get("owner") == "github"
+                and time.time() - ls.get("ts", 0) < 45 * 60):
+            log.info("the Cloudflare clock already ran this hour - GitHub's own schedule is only the spare")
             return 0
     state_sync.write_lease(s, who, "running")
     state_sync.pull(s)

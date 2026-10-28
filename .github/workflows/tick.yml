@@ -13,6 +13,9 @@ on:
         description: "test copy of the state, posting off, Telegram off"
         type: boolean
         default: false
+      source:
+        description: "cron = the Cloudflare clock started this run"
+        default: "manual"
 concurrency:
   group: tick
   cancel-in-progress: false
@@ -47,6 +50,8 @@ jobs:
             echo "TELEGRAM_BOT_TOKEN=" >> .env
           fi
       - name: tick
+        env:
+          TICK_SOURCE: ${{ github.event.inputs.source || github.event_name }}
         run: python -m src.tick --budget "${{ github.event.inputs.budget || '40' }}"
       - name: tell John on Telegram
         if: failure()

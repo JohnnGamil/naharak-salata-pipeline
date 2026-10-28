@@ -94,7 +94,8 @@ SERIES_TASK = """This time write a MINI-SERIES of exactly 3 parts (3 separate vi
 - One story arc: part 1 sets up the problem, part 2 makes it much worse, part 3 brings the payoff/twist.
 - Parts 1 and 2 END on a CLIFFHANGER that makes it impossible not to watch the next part: a shocking reveal
   ("الخاين طلع... أنا؟!"), a character in danger (the knife-free version: mom's hand reaches the fridge door!),
-  or a plan going totally wrong. Cut at the most exciting moment.
+  or a plan going totally wrong. Cut at the most exciting moment. The characters never say "follow us" /
+  "watch the next part" themselves: the channel adds that line after the story.
 - Parts 2 and 3 START with a quick 1-line reminder of what happened, then a NEW hook.
 - Part 3 is the BIGGEST episode, never a calm wrap-up: the climax (the biggest chase/battle/reveal), then the
   twist, then a short emotional or hilarious payoff. Each part escalates.
