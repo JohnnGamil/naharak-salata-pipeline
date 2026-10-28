@@ -50,6 +50,9 @@ def run(budget_min: float, s, who: str) -> None:
     app = App()
     end = time.time() + budget_min * 60
     app.ensure_slots()
+    if who == "pc":  # GitHub has been silent for hours: say so (at most every 6 h)
+        app.tg.send("🖥️ GitHub مشتغلش من كام ساعة، الكمبيوتر شغال بداله دلوقتي (سيب الكمبيوتر مفتوح)",
+                    throttle_key="pc_backup", throttle_s=6 * 3600)
     morning(app, who)
 
     def post_and_save() -> None:
