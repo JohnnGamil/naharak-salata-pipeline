@@ -242,7 +242,9 @@ def teaser(pipe, job: dict) -> bool:
             done.append(name)
         except Exception as e:  # noqa: BLE001
             log.warning("teaser story on %s failed: %s", name, e)
-    pipe.tg.send(f"📲 ستوري «الحلقة الجديدة نزلت» على {' و '.join(done) or 'ولا حتة (فشلت)'}")
+    pipe.tg.send_video(clip, f"📲 ستوري «الحلقة الجديدة نزلت» على {' و '.join(done) or 'ولا حتة (فشلت)'}"
+                             "
+لو عايز: نزّلها ستوري على TikTok كمان")
     return bool(done)
 
 
@@ -290,5 +292,7 @@ def vote_story(pipe, job: dict, story) -> bool:
             done.append(name)
         except Exception as e:  # noqa: BLE001
             log.warning("vote story on %s failed: %s", name, e)
-    pipe.tg.send_photo(img, f"🗳️ ستوري التصويت نزلت على {' و '.join(done) or 'ولا حتة (فشلت)'}")
+    pipe.tg.send_photo(img, f"🗳️ ستوري التصويت نزلت على {' و '.join(done) or 'ولا حتة (فشلت)'}"
+                            "
+لو عايز: نزّلها ستوري على TikTok كمان")
     return bool(done)
