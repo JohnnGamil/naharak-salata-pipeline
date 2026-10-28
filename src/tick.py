@@ -78,6 +78,12 @@ def run(budget_min: float, s, who: str) -> None:
         post_and_save()  # a slot may fall due while a long video is being made
     post_and_save()
     try:
+        from .compose.story import maybe_countdown
+        try:
+            if maybe_countdown(app.pipe, app.tz):
+                state_sync.push(s)
+        except Exception:  # noqa: BLE001 - a story never stops posting
+            log.exception("countdown story failed")
         from .ideas.review import maybe_review
         try:
             maybe_review(app.pipe)

@@ -607,3 +607,14 @@ def test_review_weights_and_weighted_format_pick():
     assert "مراجعة" in report(rows, w)
     picks = [pick_format([], w) for _ in range(400)]
     assert picks.count(FORMATS[0]) > picks.count(FORMATS[1]) * 4
+
+
+def test_countdown_time_text():
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+    from src.compose.story import post_time, when_text
+    tz = ZoneInfo("Africa/Cairo")
+    at = post_time(dt.datetime(2026, 10, 28, 20, 44, tzinfo=tz).timestamp(), tz)
+    assert (at.hour, at.minute) == (21, 23) and when_text(at) == "الساعة ٩ بالليل"
+    at = post_time(dt.datetime(2026, 10, 29, 16, 10, tzinfo=tz).timestamp(), tz)
+    assert when_text(at) == "الساعة ٤ العصر"

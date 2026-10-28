@@ -413,6 +413,11 @@ class Pipeline:
             archive(self, job, story)
         except Exception:
             log.exception("weekly archive of job %d failed", job["id"])
+        try:  # "the new episode is out" story on Instagram + Facebook
+            from .compose.story import teaser
+            teaser(self, self.db.job(job["id"]))
+        except Exception:
+            log.exception("teaser story of job %d failed", job["id"])
         lines = []
         for p, r in results.items():
             row = self.db.post(job["id"], p)

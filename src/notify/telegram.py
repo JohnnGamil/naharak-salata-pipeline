@@ -33,6 +33,21 @@ class Telegram:
             log.warning("telegram video error: %s", e)
         return False
 
+    def send_photo(self, photo, caption: str) -> bool:
+        if not self.enabled:
+            return False
+        try:
+            with open(photo, "rb") as f:
+                r = httpx.post(f"https://api.telegram.org/bot{self.token}/sendPhoto", timeout=120,
+                               data={"chat_id": self.chat_id, "caption": caption[:1024]},
+                               files={"photo": ("story.jpg", f, "image/jpeg")})
+            if r.status_code == 200:
+                return True
+            log.warning("telegram photo %s: %s", r.status_code, r.text[:300])
+        except (httpx.HTTPError, OSError) as e:
+            log.warning("telegram photo error: %s", e)
+        return False
+
     def send(self, text: str, throttle_key: str | None = None, throttle_s: float = 0) -> bool:
         """Send a message. With throttle_key, at most one message per throttle_s seconds."""
         if throttle_key and self.db is not None:
