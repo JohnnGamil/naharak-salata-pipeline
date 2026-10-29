@@ -116,7 +116,11 @@ class ImageGen:
     def locate_mouth(self, path: Path) -> dict:
         """Mouth box (+ eye boxes for blinking) of the character in a picture, normalized 0-1.
         One vision call; "guessed" when no mouth was found (the engines then skip the mouth)."""
-        face = self.locate_face(Image.open(path))
+        for attempt in range(3):  # Gemini is often busy for a moment (503): a still face looks dead (John)
+            face = self.locate_face(Image.open(path))
+            if face["mouth"] is not None or self.llm is None or not self.llm.gemini_enabled:
+                break
+            time.sleep(8 * (attempt + 1))
         meta = {"eyes": face["eyes"]}
         if face["mouth"] is None:
             return {**meta, "mouth": [0.42, 0.50, 0.58, 0.56], "guessed": True}
