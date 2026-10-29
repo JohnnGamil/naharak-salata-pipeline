@@ -134,6 +134,7 @@ class ImageGen:
 
     def locate_face(self, im: Image.Image) -> dict:
         """{"mouth": [x0,y0,x1,y1] | None, "eyes": [[x0,y0,x1,y1], ...]} normalized."""
+        self.face_error = False
         if self.llm is None or not self.llm.gemini_enabled:
             return {"mouth": None, "eyes": []}
         try:
@@ -166,6 +167,7 @@ class ImageGen:
             return {"mouth": next((m for m in mouths if m), None), "eyes": eyes[:2]}
         except Exception as e:
             log.warning("face detection failed: %s", e)
+            self.face_error = True  # Gemini busy/down, not "no face in the picture"
             return {"mouth": None, "eyes": []}
 
     # --- Kaggle GPU batch ----------------------------------------------------

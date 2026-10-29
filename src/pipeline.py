@@ -105,9 +105,33 @@ class Pipeline:
                           emotion=sc.emotion, prompt=sc.visual_prompt_en)
                 for i, (sc, a) in enumerate(zip(story.scenes, audio))]
 
+    def _refind_faces(self, jd: Path) -> None:
+        """Faces missed while Gemini was busy get another look; still busy -> wait an hour instead of
+        making a video with frozen mouths and shut eyes (John, 2026-10-29)."""
+        f = jd / "images.json"
+        if not f.exists():
+            return
+        data = json.loads(f.read_text(encoding="utf-8"))
+        items = [v for k, v in data.items() if k != "__scenes__" and isinstance(v, dict)]
+        items += [v for v in data.get("__scenes__") or [] if isinstance(v, dict)]
+        busy = False
+        for it in items:
+            meta = it.get("meta") or {}
+            if not meta.get("guessed") or meta.get("source") == "procedural" or not it.get("path"):
+                continue
+            new = self.images.locate_mouth(Path(it["path"]))
+            it["meta"] = {**meta, **new} if new.get("face_found") else meta
+            if new.get("face_found"):
+                it["meta"].pop("guessed", None)
+            busy |= bool(getattr(self.images, "face_error", False)) and not new.get("face_found")
+        self._write(f, data)
+        if busy:
+            raise QuotaWait("Gemini busy: faces not found yet, trying again in an hour")
+
     def stage_clips(self, job_id: int) -> None:
         job = self.db.job(job_id)
         jd = self.job_dir(job_id)
+        self._refind_faces(jd)
         specs = self._specs(job_id)
         out = jd / "clips"
         shutil.rmtree(out, ignore_errors=True)
