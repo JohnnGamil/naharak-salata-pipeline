@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from ..llm import LLM, LLMUnavailable, extract_json
 from . import cast
 from .offline_bank import SKITS
+from ..config import get_settings
 from .proofread import proofread
 from .schema import FORMATS, MAX_WORDS, MIN_WORDS, VOICES, Story
 
@@ -227,6 +228,13 @@ class IdeaGenerator:
         if loved:  # from the 2-weekly views review
             kind += (" Our audience LOVED these recent videos (learn what made them work, never copy them): "
                      + "; ".join(loved[:5]) + ".")
+        occasion = ""
+        if not series:  # an Egyptian occasion beats the daily trend
+            from zoneinfo import ZoneInfo
+            from .occasions import premise_for
+            occasion = premise_for(self.db, ZoneInfo(get_settings().timezone))
+            if occasion:
+                return occasion
         if not series:  # standalones ride today's trend when there is a safe one
             from .trends import todays_trend
             tr = todays_trend(self.llm, self.db)

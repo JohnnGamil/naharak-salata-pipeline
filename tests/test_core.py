@@ -630,3 +630,18 @@ def test_slots_are_whole_hours():
         for ts in plan_slots(dt.date(2026, 11, 2), 2, [(900, 1020), (1200, 1350)], tz, random.Random(seed)):
             t = dt.datetime.fromtimestamp(ts, tz)
             assert t.minute == 0 and t.hour in (15, 16, 20, 21, 22)
+
+
+def test_occasions_calendar_and_once_a_year(tmp_path):
+    import datetime as dt
+    from zoneinfo import ZoneInfo
+    from src.db import DB
+    from src.ideas.occasions import calendar, premise_for
+    tz = ZoneInfo("Africa/Cairo")
+    days = dict((k, d) for d, k in calendar(2026, tz))
+    assert days["sham_el_nessim"] == dt.date(2026, 4, 13)  # Coptic Easter 12 April + 1
+    assert days["winter_time"] == dt.date(2026, 10, 29) and days["black_friday"] == dt.date(2026, 11, 27)
+    db = DB(tmp_path / "t.db")
+    assert "WINTER time" in premise_for(db, tz, dt.date(2026, 10, 28))
+    assert premise_for(db, tz, dt.date(2026, 10, 29)) == ""  # used once
+    assert premise_for(db, tz, dt.date(2026, 11, 10)) == ""  # nothing near
