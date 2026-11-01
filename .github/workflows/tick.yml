@@ -22,6 +22,9 @@ on:
         description: "post today's next video now instead of at its slot"
         type: boolean
         default: false
+      extra:
+        description: "make this many new videos now, on top of the ready queue"
+        default: "0"
 concurrency:
   group: tick
   cancel-in-progress: false
@@ -59,6 +62,7 @@ jobs:
         env:
           TICK_SOURCE: ${{ github.event.inputs.source || github.event_name }}
           POST_NOW: ${{ github.event.inputs.post_now }}
+          EXTRA_VIDEOS: ${{ github.event.inputs.extra || '0' }}
         run: python -m src.tick --budget "${{ github.event.inputs.budget || '40' }}"
       - name: tell John on Telegram
         if: failure()

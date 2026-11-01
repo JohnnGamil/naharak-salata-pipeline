@@ -69,6 +69,10 @@ def run(budget_min: float, s, who: str) -> None:
             app.db.x("UPDATE post_slots SET due_ts=? WHERE id=?", (time.time() - 60, nxt[0]["id"]))
     post_and_save()
     app.pipe.retry_posts()
+    extra = int(os.environ.get("EXTRA_VIDEOS") or 0)
+    if extra > 0:  # John: "make the new videos now" - raise the queue size for this run only
+        app.s.buffer_size = max(app.s.buffer_size, len(app.db.ready_jobs()) + extra)
+        log.info("making %d extra video(s): queue size %d for this run", extra, app.s.buffer_size)
     def snapshot():
         return ([(j["id"], j["status"]) for j in app.db.unfinished_jobs()], len(app.db.ready_jobs()),
                 app.db.q("SELECT MAX(id) AS m FROM jobs")[0]["m"])
