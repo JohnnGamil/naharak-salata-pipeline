@@ -71,7 +71,7 @@ class FakeLLM:
 
     def text(self, prompt, json_mode=True, temperature=1.0, **k):
         if prompt.startswith(("You are the head writer", "You are a tough TikTok editor", "You are a strict proofreader",
-                              "You are the hook specialist")):
+                              "You are the hook specialist", "You are the script editor")):
             raise LLMUnavailable("no brainstorm in tests")
         if not self.replies:
             raise LLMUnavailable("none left")

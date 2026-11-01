@@ -12,6 +12,7 @@ from ..llm import LLM, LLMUnavailable, extract_json
 from . import cast
 from .offline_bank import SKITS
 from ..config import get_settings
+from .editor import problems
 from .hook import sharpen
 from .proofread import proofread
 from .schema import FORMATS, MAX_WORDS, MIN_WORDS, VOICES, Story
@@ -363,6 +364,9 @@ class IdeaGenerator:
                     except ValidationError as e:
                         raise ValueError(f"part {k}: {e}") from e
                 stories[0] = sharpen(self.llm, stories[0], loop=False)
+                found = problems(self.llm, stories)
+                if found:
+                    raise ValueError("the script editor found mistakes: " + " | ".join(found[:6]))
                 stories = proofread(self.llm, stories)
                 title = str(data.get("series_title") or stories[0].title)[:80]
                 return title, stories
@@ -371,7 +375,7 @@ class IdeaGenerator:
                 return None
             except (ValidationError, ValueError, json.JSONDecodeError) as e:
                 log.warning("series attempt %d invalid: %s", attempt, str(e)[:400])
-                feedback = f"\n\nYour previous answer was rejected: {str(e)[:400]}\nFix it and answer again."
+                feedback = f"\n\nYour previous answer was rejected: {str(e)[:900]}\nFix it and answer again."
         return None
 
     def generate(self) -> Story:
@@ -389,7 +393,11 @@ class IdeaGenerator:
                 if self._debut is not None and sum(sc.character_id == self._debut.id for sc in story.scenes) < 3:
                     raise ValueError(f"the new character {self._debut.id!r} must speak at least 3 lines "
                                      "in their debut episode")
-                story = proofread(self.llm, [sharpen(self.llm, story, loop=True)])[0]
+                story = sharpen(self.llm, story, loop=True)
+                found = problems(self.llm, [story])
+                if found:
+                    raise ValueError("the script editor found mistakes: " + " | ".join(found[:6]))
+                story = proofread(self.llm, [story])[0]
                 if self._debut is not None:
                     from zoneinfo import ZoneInfo
                     cast.mark_joined(self.db, self._debut,
@@ -400,7 +408,7 @@ class IdeaGenerator:
                 break
             except (ValidationError, ValueError, json.JSONDecodeError) as e:
                 log.warning("idea attempt %d invalid: %s", attempt, str(e)[:400])
-                feedback = f"\n\nYour previous answer was rejected: {str(e)[:400]}\nFix it and answer again."
+                feedback = f"\n\nYour previous answer was rejected: {str(e)[:900]}\nFix it and answer again."
         # an old bank skit is a repeat with no new characters (2026-11-01): wait for the writer instead
         from ..video.base import QuotaWait
         raise QuotaWait("no good new script yet (Gemini busy or every try rejected); trying again in an hour")
