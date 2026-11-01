@@ -18,6 +18,10 @@ on:
       source:
         description: "cron = the Cloudflare clock started this run"
         default: "manual"
+      post_now:
+        description: "post today's next video now instead of at its slot"
+        type: boolean
+        default: false
 concurrency:
   group: tick
   cancel-in-progress: false
@@ -54,6 +58,7 @@ jobs:
       - name: tick
         env:
           TICK_SOURCE: ${{ github.event.inputs.source || github.event_name }}
+          POST_NOW: ${{ github.event.inputs.post_now }}
         run: python -m src.tick --budget "${{ github.event.inputs.budget || '40' }}"
       - name: tell John on Telegram
         if: failure()

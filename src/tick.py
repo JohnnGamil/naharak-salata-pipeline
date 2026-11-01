@@ -61,6 +61,12 @@ def run(budget_min: float, s, who: str) -> None:
         if _posted(app) != n:  # save at once: a run cut off later must never post the same video twice
             state_sync.push(s)
 
+    if os.environ.get("POST_NOW") == "true":  # John: "post today's next video right now"
+        today = dt.datetime.now(app.tz).date().isoformat()
+        nxt = app.db.q("SELECT id FROM post_slots WHERE day=? AND status='PENDING' ORDER BY due_ts LIMIT 1",
+                       (today,))
+        if nxt:
+            app.db.x("UPDATE post_slots SET due_ts=? WHERE id=?", (time.time() - 60, nxt[0]["id"]))
     post_and_save()
     app.pipe.retry_posts()
     def snapshot():
