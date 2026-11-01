@@ -125,8 +125,11 @@ def sharpen(llm, story, loop: bool = True):
         raw = llm.text(WRITER.format(script=script, speaker=speaker, first=first.line_ar, second=second.line_ar,
                                      loop=LOOP_NOTE.format(last=story.scenes[-1].line_ar) if loop else "",
                                      patterns=PATTERNS, max_w=MAX_HOOK_WORDS),
-                       json_mode=True, temperature=1.0)
-        cands = [str(c).strip() for c in extract_json(raw).get("candidates") or [] if str(c).strip()]
+                       json_mode=True, temperature=1.0, writer=True)
+        data = extract_json(raw)
+        if isinstance(data, list):  # some models answer with the bare list
+            data = {"candidates": data}
+        cands = [str(c).strip() for c in data.get("candidates") or [] if str(c).strip()]
         cands = [c for c in dict.fromkeys(cands) if c != first.line_ar and len(c.split()) <= MAX_HOOK_WORDS + 2]
         kept = [c for c in cands if grounded(c, story)]
         if len(kept) < len(cands):
@@ -143,8 +146,9 @@ def sharpen(llm, story, loop: bool = True):
             rest += "\n(then the video loops back to line 1)"
         raw = llm.text(JUDGE.format(n=len(lines), rest=rest, speaker=speaker, options=options),
                        json_mode=True, temperature=0.2)
-        by_key = {str(s.get("k", "")).strip().upper()[:1]: s for s in extract_json(raw).get("scores") or []
-                  if isinstance(s, dict)}
+        data = extract_json(raw)
+        rows = data if isinstance(data, list) else data.get("scores") or []
+        by_key = {str(s.get("k", "")).strip().upper()[:1]: s for s in rows if isinstance(s, dict)}
     except LLMUnavailable:
         return story
     except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError) as e:

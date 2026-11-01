@@ -56,11 +56,11 @@ class LLM:
                                         http_options=types.HttpOptions(timeout=120_000))
         return self._client
 
-    def _gemini_call(self, contents, json_mode: bool, temperature: float) -> str:
+    def _gemini_call(self, contents, json_mode: bool, temperature: float, models: list[str] | None = None) -> str:
         from google.genai import types
 
         last: Exception | None = None
-        for model in self.s.gemini_model_list:
+        for model in models or self.s.gemini_model_list:
             if self._cooldown.get(model, 0) > time.time():
                 continue
             try:
@@ -120,7 +120,13 @@ class LLM:
             pass
         return text
 
-    def text(self, prompt: str, json_mode: bool = True, temperature: float = 1.0) -> str:
+    def text(self, prompt: str, json_mode: bool = True, temperature: float = 1.0, writer: bool = False) -> str:
+        """writer=True: creative writing, strong models only (no lite model, no Pollinations) - raises
+        LLMUnavailable when they are all busy, so the caller waits instead of writing a weak script."""
+        if writer:
+            if not self.gemini_enabled:
+                raise LLMUnavailable("GEMINI_API_KEY not set")
+            return self._gemini_call(prompt, json_mode, temperature, self.s.gemini_writer_list)
         if self.gemini_enabled:
             try:
                 return self._gemini_call(prompt, json_mode, temperature)

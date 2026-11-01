@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     # comma separated, tried in order (free-tier model names change often)
     gemini_models: str = "gemini-3.5-flash,gemini-flash-lite-latest,gemini-flash-latest"
+    # the writers (ideas, scripts, hooks) only: a lite model writes flat, too-short skits, so they wait for
+    # one of these instead (2026-11-01: 3.5-flash gave ~10 calls a day, the rest went to flash-lite)
+    gemini_writer_models: str = "gemini-3.5-flash,gemini-3-flash-preview,gemini-3.6-flash,gemini-pro-latest"
     pollinations_key: str = ""  # optional sk_ key; empty = legacy anonymous endpoint
     pollinations_image_model: str = "flux"
     # voice: "gemini" (natural Egyptian delivery, free) with edge-tts fallback, or "edge"
@@ -122,6 +125,10 @@ class Settings(BaseSettings):
     @property
     def gemini_model_list(self) -> list[str]:
         return [m.strip() for m in self.gemini_models.split(",") if m.strip()]
+
+    @property
+    def gemini_writer_list(self) -> list[str]:
+        return [m.strip() for m in self.gemini_writer_models.split(",") if m.strip()]
 
     @property
     def kaggle_enabled(self) -> bool:

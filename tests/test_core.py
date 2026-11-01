@@ -69,7 +69,7 @@ class FakeLLM:
     def __init__(self, replies):
         self.replies = list(replies)
 
-    def text(self, prompt, json_mode=True, temperature=1.0):
+    def text(self, prompt, json_mode=True, temperature=1.0, **k):
         if prompt.startswith(("You are the head writer", "You are a tough TikTok editor", "You are a strict proofreader",
                               "You are the hook specialist")):
             raise LLMUnavailable("no brainstorm in tests")
@@ -639,7 +639,7 @@ def test_proofread_fixes_small_mistakes_and_refuses_rewrites():
                        {"id": "0.line0", "text": "كلام مختلف خالص مالوش أي علاقة باللي فات ده خالص يعني"}]}
 
     class One:
-        def text(self, prompt, json_mode=True, temperature=1.0):
+        def text(self, prompt, json_mode=True, temperature=1.0, **k):
             return json.dumps(reply, ensure_ascii=False)
     out = proofread(One(), [st])[0]
     assert out.caption_ar == st.caption_ar + "!"

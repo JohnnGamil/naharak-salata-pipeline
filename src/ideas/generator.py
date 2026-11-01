@@ -55,7 +55,9 @@ Write ONE new skit that BOTH kids and adults enjoy (think Pixar / Bakkar / Bougy
   death, blood, weapons, crime words like قاتل/قتل/جريمة دم, drugs, alcohol, smoking, kissing or
   anything adult - not even as a joke (no "هموت من الضحك", no "هقتلك"). For a mystery use المتهم,
   اللغز, التحقيق, مين عملها. Nobody gets hurt; the worst that happens is funny chaos.
-- {min_s}-{max_s} scenes. Total words across all line_ar between {min_w} and {max_w} (30-60 seconds of speech).
+- {min_s}-{max_s} scenes. Total words across all line_ar between {min_w} and {max_w} (30-60 seconds of speech):
+  aim for about 95 words, e.g. 6 lines of 13-18 words each (only the hook is short). Count before you answer;
+  too-short scripts are rejected.
 - One speaking character per scene. 1-3 characters, mostly from the MAIN CAST below; at most one guest.
   When a line talks about ماما or بابا and they are in the MAIN CAST, they can be IN the video (better
   than only talking about them). Never write human characters: the whole family is fruits and vegetables.
@@ -104,7 +106,7 @@ people watch it twice without noticing - the strongest signal for the algorithm)
   line as a COMPLETE sentence that sets up the first line, e.g. last: "ومن ساعتها كل ما حد يفتح التلاجة
   بيسمع حد بيصرخ!" -> first: "مين اللي كل الجبنة؟!". Or the last line starts the same situation again.
 - The last line is still a full sentence that makes sense on its own: never cut it on a word like عشان،
-  لما، و، أول ما، and never repeat one word over and over to fake an ending.
+  لما، و، أول ما, never end it with "...", and never repeat one word over and over to fake an ending.
 - No goodbye, no "follow us", no question to the viewers in the last line (it breaks the loop); the comment
   question goes in caption_ar instead. The story doesn't wrap up neatly: it opens the same trouble again.
 Return ONLY JSON in exactly this shape:
@@ -305,13 +307,13 @@ class IdeaGenerator:
         try:
             raw = self.llm.text(BRAINSTORM.format(fmt=fmt, kind=kind, season=season_hint(),
                                                   bible=self._bible(), recent="; ".join(recent[:30]) or "none"),
-                                json_mode=True, temperature=1.1)
+                                json_mode=True, temperature=1.1, writer=True)
             ideas = [i for i in extract_json(raw).get("ideas", []) if isinstance(i, dict) and i.get("premise")]
             if not ideas:
                 return ""
             listing = "\n".join(f"{k}. {json.dumps(i, ensure_ascii=False)}" for k, i in enumerate(ideas))
-            scores = extract_json(self.llm.text(JUDGE.format(ideas=listing), json_mode=True,
-                                                temperature=0.3)).get("scores", [])
+            data = extract_json(self.llm.text(JUDGE.format(ideas=listing), json_mode=True, temperature=0.3))
+            scores = data if isinstance(data, list) else data.get("scores", [])
             keys = ("hook", "relatable", "twist", "shareable", "comments", "kids", "cliffhanger")
 
             def total(sc: dict) -> float:
@@ -335,7 +337,7 @@ class IdeaGenerator:
 
     def _prompt(self, fmt: str, recent: list[str], task: str, premise: str = "") -> str:
         return PROMPT.format(
-            fmt=fmt, premise=premise, min_s=4, max_s=7, min_w=MIN_WORDS + 6, max_w=MAX_WORDS - 15,
+            fmt=fmt, premise=premise, min_s=5, max_s=7, min_w=MIN_WORDS + 6, max_w=MAX_WORDS - 15,
             bible=self._bible() + "\n\nOther characters already seen on the channel:\n" + self._library_text(),
             recent="\n".join(f"- {t}" for t in recent) or "(none yet)",
             answer=task.replace("{fmt}", fmt).replace("{{", "{").replace("}}", "}"),
@@ -349,7 +351,7 @@ class IdeaGenerator:
         feedback = ""
         for attempt in range(1, self.max_attempts + 1):
             try:
-                raw = self.llm.text(prompt + feedback, json_mode=True, temperature=1.0)
+                raw = self.llm.text(prompt + feedback, json_mode=True, temperature=1.0, writer=True)
                 data = extract_json(raw)
                 parts = data.get("parts") if isinstance(data, dict) else None
                 if not isinstance(parts, list) or len(parts) != 3:
@@ -380,7 +382,7 @@ class IdeaGenerator:
         feedback = ""
         for attempt in range(1, self.max_attempts + 1):
             try:
-                raw = self.llm.text(prompt + feedback, json_mode=True, temperature=1.0)
+                raw = self.llm.text(prompt + feedback, json_mode=True, temperature=1.0, writer=True)
                 story = Story.model_validate(extract_json(raw))
                 if story.title in recent:
                     raise ValueError("title repeats a recent video")

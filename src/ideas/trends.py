@@ -25,9 +25,9 @@ PICK = """These are today's top Google searches in Egypt (search term | a news h
 
 We run a family-friendly Egyptian TikTok channel of cute talking fruits and vegetables (kids + adults).
 Pick AT MOST ONE trend we can joke about today. It must be an everyday topic everyone shares: weather,
-a big football match (talk about the match, not players' private lives), exams/results/school, prices,
+a big football match (talk about the match, not players' private lives), exams/results/school,
 a holiday or season, a food, a harmless funny viral thing, a new phone/app/game everyone talks about.
-NEVER: a real person as the subject, a scandal, an accident, a death, illness, crime, a court case,
+NEVER: prices, money or the economy (the videos would state made-up facts), a real person as the subject, a scandal, an accident, a death, illness, crime, a court case,
 politics, war, religion, or anything sad. If nothing fits, use=false.
 Return ONLY JSON: {{"use": true, "trend": "the search term", "topic_en": "the safe topic in English",
 "angle": "one sentence: how our vegetables could react to it in a funny way"}}"""
