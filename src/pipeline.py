@@ -39,6 +39,13 @@ from .voice.tts import OUTRO_TEXT, synth_outro, synthesize_story
 log = logging.getLogger(__name__)
 
 
+def vote_outro(vote: dict) -> str:
+    """Said at the end of a part that asks the viewers: the question AND what 1 and 2 mean."""
+    o = vote["options"]
+    return (f"{vote['question_ar'].rstrip('؟?! ')}؟ لو {o[0]} اكتبوا واحد، ولو {o[1]} اكتبوا اتنين، "
+            "واللي هياخد أصوات أكتر هو اللي هيحصل في الجزء الجاي!")
+
+
 class Pipeline:
     def __init__(self, settings, db: DB | None = None, notifier: Telegram | None = None):
         self.s = settings
@@ -90,9 +97,11 @@ class Pipeline:
         last = story.scenes[-1].line_ar
         said = any(k in last for k in ("تابع", "الجزء التاني", "الجزء الجاي", "الحلقة الجاية"))  # never twice
         if job.get("series_id") and (job.get("part") or 0) < (job.get("parts") or 0) and (story.vote or not said):
-            text = ("اكتبولنا في الكومنتات: واحد ولا اتنين؟ وتابعونا عشان تشوفوا اللي هيحصل"
-                    if story.vote else OUTRO_TEXT)
-            self._write(jd / "audio" / "outro.json", synth_outro(story, jd / "audio", self.s, text))
+            text = vote_outro(story.vote) if story.vote else OUTRO_TEXT
+            outro = synth_outro(story, jd / "audio", self.s, text)
+            if story.vote:
+                outro["vote"] = story.vote  # composer shows the question and both choices on screen
+            self._write(jd / "audio" / "outro.json", outro)
         self.db.set_status(job_id, "AUDIO")
 
     def _specs(self, job_id: int) -> list[SceneSpec]:

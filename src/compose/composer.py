@@ -97,13 +97,29 @@ def pick_music(fmt: str) -> Path | None:
     return named[0] if named else random.choice(tracks)
 
 
+def vote_clip(last_clip: Path, vote: dict, work: Path) -> Path:
+    """The vote ending (John, 2026-11-01: "1 or 2 - nobody knows what they mean"): the last scene's
+    picture with the question and both numbered choices written big, while the character says them."""
+    from .story import vote_card
+    frame = work / "vote_frame.jpg"
+    run(["ffmpeg", "-y", "-v", "error", "-sseof", "-0.2", "-i", str(last_clip), "-frames:v", "1",
+         "-q:v", "2", str(frame)])
+    card = vote_card(frame, vote["question_ar"], vote["options"], work / "vote_card.jpg")
+    out = work / "vote_clip.mp4"
+    run(["ffmpeg", "-y", "-v", "error", "-loop", "1", "-i", str(card), "-t", "12", "-vf", COVER,
+         "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", str(out)])
+    return out
+
+
 def compose(story, audio: list[dict], clips: list[Path], job_dir: Path, preset: str = "veryfast",
             hook: bool = False, outro: dict | None = None, loop: bool = False, settings=None) -> Path:  # hook: title overlay off (John)
     lines = [sc.line_ar for sc in story.scenes]
-    if outro:  # "follow for the next part": one more segment on the last scene's picture
-        audio, clips, lines = [*audio, outro], [*clips, clips[-1]], [*lines, outro["text"]]
     work = job_dir / "compose"
     work.mkdir(parents=True, exist_ok=True)
+    vote = (outro or {}).get("vote")
+    if outro:  # "follow for the next part": one more segment on the last scene's picture
+        last = vote_clip(clips[-1], vote, work) if vote else clips[-1]
+        audio, clips, lines = [*audio, outro], [*clips, last], [*lines, outro["text"]]
     seg_durs = [n_frames(a["duration"]) / FPS for a in audio]
     if loop:  # end right on the last word, so the replay starts with no gap (rewatch loop)
         seg_durs[-1] = max(0.5, n_frames(max(0.3, seg_durs[-1] - trailing_silence(audio[-1]["wav"]) + 0.06)) / FPS)
@@ -118,9 +134,10 @@ def compose(story, audio: list[dict], clips: list[Path], job_dir: Path, preset: 
                                             if sfx.wants_snore(ln)])
 
     sub_scenes, offset = [], 0.0
-    for line, a, d in zip(lines, audio, seg_durs):
-        words = align.aligned(a["wav"], line, d, a["words"], settings) if settings else a["words"]
-        sub_scenes.append({"offset": offset, "duration": d, "line": line, "words": words})
+    for k, (line, a, d) in enumerate(zip(lines, audio, seg_durs)):
+        if not (vote and k == len(lines) - 1):  # the vote card carries its own big text
+            words = align.aligned(a["wav"], line, d, a["words"], settings) if settings else a["words"]
+            sub_scenes.append({"offset": offset, "duration": d, "line": line, "words": words})
         offset += d
     total = offset
     ass = write_ass(sub_scenes, work / "subs.ass", hook=story.title if hook else None)

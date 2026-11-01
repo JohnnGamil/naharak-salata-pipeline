@@ -250,7 +250,8 @@ def teaser(pipe, job: dict) -> bool:
 
 # --- vote card with series part 1 (John, 2026-10-28) ----------------------------------------------
 
-def vote_card(picture: Path, question: str, options: list[str], out: Path) -> Path:
+def vote_card(picture: Path, question: str, options: list[str], out: Path,
+              comment_line: str = "في الكومنتات") -> Path:
     """Story picture: the cover with the question and the two numbered choices, sending people to
     the reel's comments (the APIs offer no poll sticker)."""
     ass = out.with_suffix(".ass")
@@ -264,7 +265,7 @@ def vote_card(picture: Path, question: str, options: list[str], out: Path) -> Pa
             f"Style: C,{CAPTION_FONT},66,&H0000D7FF,&H0000D7FF,&H00000000,&H96000000,1,0,0,0,100,100,0,0,1,5,2,2,60,60,120,1\n\n"
             "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
     ev = [("Q", question), ("A", f"اكتب ١ لو {options[0]}"), ("B", f"اكتب ٢ لو {options[1]}"),
-          ("C", "في كومنتات الريل")]
+          ("C", comment_line)]
     ass.write_text(head + "".join(f"Dialogue: 0,0:00:00.00,0:00:05.00,{st},,0,0,0,,{tx}\n" for st, tx in ev),
                    encoding="utf-8")
     vf = ("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
@@ -283,7 +284,8 @@ def vote_story(pipe, job: dict, story) -> bool:
         return False
     work = pipe.s.data_dir / "stories" / str(job["id"])
     work.mkdir(parents=True, exist_ok=True)
-    img = vote_card(pic, story.vote["question_ar"], story.vote["options"], work / "vote.jpg")
+    img = vote_card(pic, story.vote["question_ar"], story.vote["options"], work / "vote.jpg",
+                   "في كومنتات الريل")
     url = r2.put_public(pipe.s, img, f"stories/{job['id']:05d}_vote.jpg", "image/jpeg")
     done = []
     for name, fn in (("Instagram", _instagram), ("Facebook", _facebook)):
