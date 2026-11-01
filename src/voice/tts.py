@@ -31,6 +31,9 @@ EMOTION = {
 GAP_S = 0.25  # silence after each line
 
 
+HOOK_SPEED = 1.08
+
+
 def char_pitches(story) -> dict[str, int]:
     """Characters sharing a voice get different pitch offsets so they sound distinct."""
     out, used = {}, {}
@@ -95,7 +98,8 @@ def gemini_semitones(story, voices: dict[str, str]) -> dict[str, int]:
     out, used = {}, {}
     for c in story.characters:
         n = used.get(voices[c.id], 0)
-        out[c.id] = [0, 3, -3, 5][n % 4]
+        member = cast.BY_ID.get(c.id)
+        out[c.id] = [0, 3, -3, 5][n % 4] + (member.pitch if member else 0)
         used[voices[c.id]] = n + 1
     return out
 
@@ -134,6 +138,9 @@ def _gemini_story(story, adir: Path, settings) -> list[dict]:
         lead = min(t0, 0.08)
         wav = adir / f"scene_{i:02d}.wav"
         af = f"atrim=start={t0 - lead:.3f}:end={t1 + 0.05:.3f},asetpts=PTS-STARTPTS,apad=pad_dur={GAP_S}"
+        speed = HOOK_SPEED if i == 0 else 1.0  # the hook is said fast and urgent (John)
+        if speed != 1.0:
+            af = af.replace(",apad=", f",atempo={speed},apad=")
         st = shifts[ch.id]
         if st:
             f = 2 ** (st / 12)  # pitch up/down without changing speed
@@ -141,7 +148,7 @@ def _gemini_story(story, adir: Path, settings) -> list[dict]:
         run(["ffmpeg", "-y", "-v", "error", "-i", str(raw), "-af", af, "-ar", "44100", "-ac", "1", str(wav)])
         raw.unlink(missing_ok=True)
         out.append({"wav": str(wav), "duration": ffprobe_duration(wav), "scene": i, "voice": used_spec[i],
-                    "words": gemini_tts.spread_words(sc.line_ar, lead, lead + (t1 - t0))})
+                    "words": gemini_tts.spread_words(sc.line_ar, lead / speed, (lead + t1 - t0) / speed)})
     for f in adir.glob("voice_*_raw.wav"):
         f.unlink(missing_ok=True)
     return out

@@ -70,15 +70,22 @@ class FakeLLM:
         self.replies = list(replies)
 
     def text(self, prompt, json_mode=True, temperature=1.0):
-        if prompt.startswith(("You are the head writer", "You are a tough TikTok editor", "You are a strict proofreader")):
+        if prompt.startswith(("You are the head writer", "You are a tough TikTok editor", "You are a strict proofreader",
+                              "You are the hook specialist")):
             raise LLMUnavailable("no brainstorm in tests")
         if not self.replies:
             raise LLMUnavailable("none left")
         return self.replies.pop(0)
 
 
+def _all_joined(db):
+    from src.ideas import cast
+    db.put("cast_joined", {a.id: "2026-01-01" for a in cast.ARRIVALS})
+
+
 def test_generator_retries_then_validates(tmp_path):
     db = DB(tmp_path / "t.db")
+    _all_joined(db)
     good = json.dumps(SKITS[2], ensure_ascii=False)
     gen = IdeaGenerator(FakeLLM(["not json", '{"title": "x"}', good]), db)
     assert gen.generate().title == SKITS[2]["title"]
@@ -92,10 +99,45 @@ def test_generator_falls_back_offline(tmp_path):
 
 def test_library_keeps_recurring_character_look(tmp_path):
     db = DB(tmp_path / "t.db")
+    _all_joined(db)
     db.upsert_character("tomato", name_ar="طمطم", voice="ar-EG-ShakirNeural", look="a specific stored look xyz")
     st = IdeaGenerator(FakeLLM([json.dumps(SKITS[0], ensure_ascii=False)]), db).generate()
     assert st.char("tomato").look == "a specific stored look xyz"
     assert st.char("tomato").name == "طمطم"
+
+
+def test_family_debuts_one_at_a_time(tmp_path):
+    import datetime as dt
+    from src.ideas import cast
+    db = DB(tmp_path / "t.db")
+    day = dt.date(2026, 11, 1)
+    assert cast.next_debut(db, day).id == "mama"
+    cast.mark_joined(db, cast.next_debut(db, day), day)
+    assert cast.next_debut(db, day + dt.timedelta(days=3)) is None  # too soon
+    assert cast.next_debut(db, day + dt.timedelta(days=cast.DEBUT_EVERY_DAYS)).id == "baba"
+    assert "ماما قرنبيطة" in cast.bible_text(db) and "بابا كرنب" not in cast.bible_text(db)
+    voices = [c.voice for c in cast.MAIN + cast.ARRIVALS]
+    assert len(voices) == len(set(voices))  # every family member sounds different
+    assert not set(voices) & {v for vs in cast.GUEST_VOICES.values() for v in vs}
+
+
+def test_hook_doctor_swaps_only_a_clear_winner():
+    from src.ideas.hook import sharpen
+    st = Story.model_validate(SKITS[0])
+
+    class L:
+        def __init__(self, reply):
+            self.reply = reply
+
+        def text(self, *a, **k):
+            return self.reply
+    win = json.dumps({"candidates": ["الحقوا! حد فتح التلاجة الساعة ٣ الفجر!"],
+                      "scores": [{"i": 0, "stop": 4, "curiosity": 4, "fit": 8, "clarity": 8},
+                                 {"i": 1, "stop": 9, "curiosity": 8, "fit": 8, "clarity": 9}]}, ensure_ascii=False)
+    assert sharpen(L(win), st).scenes[0].line_ar == "الحقوا! حد فتح التلاجة الساعة ٣ الفجر!"
+    tie = win.replace('"stop": 9', '"stop": 4').replace('"curiosity": 8', '"curiosity": 4').replace('"clarity": 9', '"clarity": 8')
+    assert sharpen(L(tie), st).scenes[0].line_ar == st.scenes[0].line_ar
+    assert sharpen(L("garbage"), st).scenes[0].line_ar == st.scenes[0].line_ar
 
 
 def test_format_rotation():

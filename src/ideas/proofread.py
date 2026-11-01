@@ -25,7 +25,8 @@ For EACH text fix ONLY real mistakes:
   it changes the reading, words glued together or split wrongly;
 - broken grammar or an unnatural phrase no Egyptian would say (e.g. "مين حصل معاكوا كده؟" -> "حد حصل معاه
   كده قبل كده؟"), wrong gender/number agreement (a female character: "طلعت", not "طلع");
-- a word that does not exist or means something else.
+- a word that does not exist or means something else, or a real word used for the wrong thing (fruit
+  goes "معفنة" / "بايظة", never "مصدية" which is rust on metal);
 - a missing article that sounds wrong ("طلعت ليمونة هي اللي" -> "طلعت الليمونة هي اللي").
 Egyptian spelling IS correct here, never "fix" it to فصحى: تلاجة (not ثلاجة), كده, إزاي, دلوقتي, قولنا,
 اتابعوا, إحنا, أوي, جبنة رومي / الجبنة الرومي, مش, عشان.

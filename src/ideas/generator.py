@@ -12,6 +12,7 @@ from ..llm import LLM, LLMUnavailable, extract_json
 from . import cast
 from .offline_bank import SKITS
 from ..config import get_settings
+from .hook import sharpen
 from .proofread import proofread
 from .schema import FORMATS, MAX_WORDS, MIN_WORDS, VOICES, Story
 
@@ -25,8 +26,18 @@ Write ONE new skit that BOTH kids and adults enjoy (think Pixar / Bakkar / Bougy
   Characters have strong, lovable personalities (the drama queen, the know-it-all, the scaredy-cat).
 - Jokes work on two levels: silly and visual for kids, relatable Egyptian everyday life for adults
   (mom's cooking, the fridge, the market, prices, school, exams, Ramadan, summer, family visits).
-- Hook in the FIRST line (first 2 seconds): a shocking statement, a scream, or a question that makes
-  people stop scrolling. Never start with greetings like "أهلا يا جماعة".
+- HOOK = the FIRST line (first 2 seconds), at most 9 words, said fast. Start IN the problem, never before it:
+  a disaster already happening ("ماما لقت الفلوس!"), a secret about to come out, a line that talks to the
+  viewer's own life ("لو عندك أخ صغير متكملش الفيديو ده"), an impossible claim, or a panic with a reason.
+  It opens a question only the end answers. Never a greeting, never an introduction of who is talking.
+  The first picture is the most striking one (extreme close-up of the shocked face, or the chaos itself).
+- Line 2 lands within 3 seconds and makes it WORSE (raises the stakes) - nobody leaves after line 2.
+- QUALITY BAR (we want the best videos on Egyptian TikTok, not filler): every line must earn its place
+  with a joke, a reveal or a new problem; cut any line that only explains. Use SPECIFIC Egyptian home
+  details people recognise instantly (طبق الضيوف، كيس الأكياس، الكنبة اللي في الأنتريه، جروب العيلة،
+  فاتورة الكهربا، الريموت). Comedy comes from WHO the characters are (the lazy one solves it lazily, the
+  drama queen makes it a catastrophe). Call back to an early line in the ending. The twist must be
+  surprising but obvious in hindsight.
 - Something changes every scene (new emotion, new action or new place) so the video never feels static.
 - End with a punchline or twist, and sometimes a question to the viewers to make them comment.
 - Genre/format: {fmt}  (drama = emotional twist, comedy = jokes, advice = useful kitchen/health tip,
@@ -46,6 +57,8 @@ Write ONE new skit that BOTH kids and adults enjoy (think Pixar / Bakkar / Bougy
   اللغز, التحقيق, مين عملها. Nobody gets hurt; the worst that happens is funny chaos.
 - {min_s}-{max_s} scenes. Total words across all line_ar between {min_w} and {max_w} (30-60 seconds of speech).
 - One speaking character per scene. 1-3 characters, mostly from the MAIN CAST below; at most one guest.
+  When a line talks about ماما or بابا and they are in the MAIN CAST, they can be IN the video (better
+  than only talking about them). Never write human characters: the whole family is fruits and vegetables.
   Use each character's catchphrase about once when it fits. First scene must be a strong hook.
   Last scene: see the ending rules at the end (loop for a single video, cliffhanger for a series).
 - Each character gets a voice: "ar-EG-ShakirNeural" (male) or "ar-EG-SalmaNeural" (female).
@@ -56,6 +69,9 @@ Write ONE new skit that BOTH kids and adults enjoy (think Pixar / Bakkar / Bougy
   lunchbox, frying pan...) and the camera (close-up / wide shot / low angle). Make each scene's picture
   different and fun to look at. Only that scene's speaking character in focus. No text in the image.
 - If a character snores or sleeps, write the snore in the line as "خخخخ" (a real snore sound is added).
+  Use "خخخخ" ONLY for snoring (never for a cough, a laugh or crying).
+- Never invent news that sounds real: no fake weather forecasts, official announcements, prices, dates or
+  "عاجل" breaking news. Jokes come from the characters, not from made-up facts.
 - emotion: one of neutral, happy, angry, sad, excited, scared, sarcastic, surprised.
 - caption_ar: short Egyptian Arabic TikTok caption with 1-2 emojis and a question that invites comments.
 - hashtags: exactly 4, Arabic, no '#', no spaces (use _): 1 broad Egyptian one people really search
@@ -95,8 +111,8 @@ SERIES_TASK = """This time write a MINI-SERIES of exactly 3 parts (3 separate vi
   Still NEVER hitting/hurting/violence words (no ضرب/قتل/دم/سلاح...).
 - One story arc: part 1 sets up the problem, part 2 makes it much worse, part 3 brings the payoff/twist.
 - Parts 1 and 2 END on a CLIFFHANGER that makes it impossible not to watch the next part: a shocking reveal
-  ("الخاين طلع... أنا؟!"), a character in danger (the knife-free version: mom's hand reaches the fridge door!),
-  or a plan going totally wrong. Cut at the most exciting moment. The characters never say "follow us" /
+  ("الخاين طلع... أنا؟!"), a character in danger (Mama opens the fridge door!),
+  or a plan going totally wrong (Mama's footsteps at the kitchen door!). Cut at the most exciting moment. The characters never say "follow us" /
   "watch the next part" themselves: the channel adds that line after the story.
 - Parts 2 and 3 START with a quick 1-line reminder of what happened, then a NEW hook.
 - Part 3 is the BIGGEST episode, never a calm wrap-up: the climax (the biggest chase/battle/reveal), then the
@@ -207,6 +223,37 @@ def pick_format(recent: list[str], weights: dict[str, float] | None = None) -> s
 class IdeaGenerator:
     def __init__(self, llm: LLM, db, max_attempts: int = 4):
         self.llm, self.db, self.max_attempts = llm, db, max_attempts
+        self._debut = None  # the family member whose debut episode is being written
+
+    def _rested(self, n: int = 6) -> list[str]:
+        """Main characters missing from the last n videos (everyone gets screen time)."""
+        seen: set[str] = set()
+        for row in self.db.q("SELECT story_json FROM jobs WHERE story_json IS NOT NULL ORDER BY id DESC LIMIT ?",
+                             (n,)):
+            try:
+                seen |= {c["id"] for c in json.loads(row["story_json"]).get("characters", [])}
+            except (ValueError, TypeError, KeyError):
+                pass
+        return [f'{c.name} ("{c.id}")' for c in cast.main_cast(self.db) if c.id not in seen]
+
+    def _bible(self) -> str:
+        return cast.bible_text(self.db, self._rested())
+
+    def _debut_premise(self) -> str:
+        """Every DEBUT_EVERY_DAYS a new family member gets their own entrance episode."""
+        from zoneinfo import ZoneInfo
+        today = dt.datetime.now(ZoneInfo(get_settings().timezone)).date()
+        member = cast.next_debut(self.db, today)
+        if member is None:
+            return ""
+        self._debut = member
+        g = "male" if member.edge == cast.MALE else "female"
+        return (f"USE THIS PREMISE - A NEW CHARACTER JOINS THE SHOW, so this is a special debut episode: "
+                f"{member.debut}.\nThe new character MUST be in it with a big entrance and lines of their own: "
+                f'id "{member.id}", name "{member.name}", {g}, voice "{member.edge}", look: {member.look}. '
+                f"Personality: {member.personality}. Catchphrase (once): \"{member.catchphrase}\". "
+                f"Relations: {member.relations}. Viewers must love them by the end and want to see them again. "
+                "Add 1-2 of the main cast who react to them.")
 
     def _library_text(self) -> str:
         chars = self.db.characters()[:10]
@@ -235,6 +282,9 @@ class IdeaGenerator:
             occasion = premise_for(self.db, ZoneInfo(get_settings().timezone))
             if occasion:
                 return occasion
+            debut = self._debut_premise()
+            if debut:
+                return debut
         if not series:  # standalones ride today's trend when there is a safe one
             from .trends import todays_trend
             tr = todays_trend(self.llm, self.db)
@@ -244,7 +294,7 @@ class IdeaGenerator:
                          "trend (never about a real person). The video posts today, so it must feel like today.")
         try:
             raw = self.llm.text(BRAINSTORM.format(fmt=fmt, kind=kind, season=season_hint(),
-                                                  bible=cast.bible_text(), recent="; ".join(recent[:30]) or "none"),
+                                                  bible=self._bible(), recent="; ".join(recent[:30]) or "none"),
                                 json_mode=True, temperature=1.1)
             ideas = [i for i in extract_json(raw).get("ideas", []) if isinstance(i, dict) and i.get("premise")]
             if not ideas:
@@ -276,7 +326,7 @@ class IdeaGenerator:
     def _prompt(self, fmt: str, recent: list[str], task: str, premise: str = "") -> str:
         return PROMPT.format(
             fmt=fmt, premise=premise, min_s=4, max_s=7, min_w=MIN_WORDS + 6, max_w=MAX_WORDS - 15,
-            bible=cast.bible_text() + "\n\nOther characters already seen on the channel:\n" + self._library_text(),
+            bible=self._bible() + "\n\nOther characters already seen on the channel:\n" + self._library_text(),
             recent="\n".join(f"- {t}" for t in recent) or "(none yet)",
             answer=task.replace("{fmt}", fmt).replace("{{", "{").replace("}}", "}"),
         )
@@ -300,6 +350,7 @@ class IdeaGenerator:
                         stories.append(self._apply_library(Story.model_validate(part)))
                     except ValidationError as e:
                         raise ValueError(f"part {k}: {e}") from e
+                stories[0] = sharpen(self.llm, stories[0], loop=False)
                 stories = proofread(self.llm, stories)
                 title = str(data.get("series_title") or stories[0].title)[:80]
                 return title, stories
@@ -312,6 +363,7 @@ class IdeaGenerator:
         return None
 
     def generate(self) -> Story:
+        self._debut = None
         recent = self.db.recent_titles(50)
         fmt = pick_format(self.db.recent_formats(len(FORMATS)), self.db.get("format_weights"))
         prompt = self._prompt(fmt, recent, SINGLE_TASK, self.best_premise(fmt, recent, False))
@@ -322,7 +374,14 @@ class IdeaGenerator:
                 story = Story.model_validate(extract_json(raw))
                 if story.title in recent:
                     raise ValueError("title repeats a recent video")
-                return self._apply_library(proofread(self.llm, [story])[0])
+                if self._debut is not None and self._debut.id not in {c.id for c in story.characters}:
+                    raise ValueError(f"the new character {self._debut.id!r} must be in this episode")
+                story = proofread(self.llm, [sharpen(self.llm, story, loop=True)])[0]
+                if self._debut is not None:
+                    from zoneinfo import ZoneInfo
+                    cast.mark_joined(self.db, self._debut,
+                                     dt.datetime.now(ZoneInfo(get_settings().timezone)).date())
+                return self._apply_library(story)
             except LLMUnavailable as e:
                 log.warning("no LLM for ideas: %s", e)
                 break

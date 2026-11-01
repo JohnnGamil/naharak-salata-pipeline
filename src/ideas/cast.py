@@ -24,6 +24,8 @@ class CastMember:
     look: str
     relations: str = ""
     seasons: tuple[str, ...] = field(default_factory=tuple)  # guests only: when they may appear
+    pitch: int = 0  # semitones on the Gemini voice (the little brother sounds like a kid)
+    debut: str = ""  # arrivals only: the premise of the episode that brings them in
 
 
 MAIN = [
@@ -106,10 +108,122 @@ GUESTS = [
                seasons=("any",)),
 ]
 
-GUEST_VOICES = {MALE: ["Charon", "Fenrir", "Algenib", "Achird", "Orus"],
-                FEMALE: ["Aoede", "Zephyr", "Sulafat", "Despina", "Callirrhoe"]}
+# The family grows over time (John, 2026-11-01: "the videos keep saying mama - where is mama? new
+# characters with time, top quality"). One arrival every DEBUT_EVERY_DAYS, each in its own debut
+# episode; from then on they are main cast. The parents come first: almost every video talks about
+# them already. Each arrival has a voice nobody else uses.
+ARRIVALS = [
+    CastMember(
+        "mama", "ماما قرنبيطة", FEMALE, "Sulafat",
+        "the classic Egyptian mom of the kitchen: sees everything (انتوا فاكريني مش واخدة بالي؟), keeps "
+        "the best food for the guests, compares everyone to the neighbours' kids, says she won't talk again "
+        "and then talks for ten minutes, secretly the softest heart in the house",
+        "أنا مش هتكلم تاني!",
+        "a white cauliflower mom whose florets look like big hair rollers, a flowery house apron, "
+        "a wooden spoon in her hand, sharp knowing eyes, one raised eyebrow, tiny arms and legs",
+        "mom of tomato, potato and little zucchini; married to Baba Cabbage; obeys only Teita Garlic",
+        debut="MAMA ARRIVES: the gang says 'ماما هتعرف' in every episode, and today Mama Cauliflower finally "
+              "walks in, back early from her sister's, and finds the kitchen in total chaos. A big entrance "
+              "(the door opens, everyone freezes), she uncovers every secret in seconds, and the twist: she "
+              "knew all along",
+    ),
+    CastMember(
+        "baba", "بابا كرنب", MALE, "Algenib",
+        "the Egyptian dad: calm until the electricity bill comes (مين اللي سايب النور والع؟), falls asleep "
+        "in front of the TV and wakes up saying he was watching, answers every request with 'ask your mom', "
+        "tells the same story about his youth, makes dad jokes nobody laughs at",
+        "اسألوا أمكوا!",
+        "a big round green cabbage dad with a thick black mustache, reading glasses on his nose, a folded "
+        "newspaper under his arm and the TV remote in his hand, tiny arms and legs",
+        "married to Mama Cauliflower; the kids ask him first because he says yes without listening",
+        debut="BABA'S BIG DAY: the electricity bill arrives and Baba Cabbage turns detective to find who left "
+              "the AC and the lights on all month; every kid blames another; the twist is relatable (it was "
+              "Baba himself, asleep in front of the TV)",
+    ),
+    CastMember(
+        "zucchini", "كوسة الصغير", MALE, "Fenrir",
+        "the youngest kid: mischievous, asks 'ليه؟' a hundred times, repeats every secret in front of Mama "
+        "at the worst moment, cries fake tears to get what he wants",
+        "أنا هقول لماما!",
+        "a tiny light-green baby zucchini kid with a backwards cap, a gap-toothed grin, big curious eyes, "
+        "a school bag bigger than himself, tiny arms and legs",
+        "little brother of tomato and potato; Mama's favourite (everybody knows it)",
+        pitch=4,
+        debut="THE LITTLE BROTHER: the gang hides a big secret from Mama (the broken plate, the hidden "
+              "chocolate) and little Zucchini overhears; all episode they bribe him to keep quiet, and at "
+              "the last second he says the one sentence that exposes everything",
+    ),
+    CastMember(
+        "okra", "طنط بامية", FEMALE, "Laomedeia",
+        "the nosy neighbour from the shelf upstairs: knows the news of the whole building before it "
+        "happens, visits for five minutes and stays three hours, spreads gossip that turns out wrong",
+        "سمعتوا اللي حصل؟",
+        "a slim green okra auntie with big golden earrings, a colourful headscarf, one hand always on her "
+        "hip, curious narrowed eyes, tiny arms and legs",
+        "Mama's friend and rival; Teita does not trust her news",
+        debut="THE NEIGHBOUR: Tant Okra visits with 'breaking news' about the fridge (a rumour that someone "
+              "is getting married, or that the vegetables get cooked tomorrow); the gossip spreads shelf to "
+              "shelf and grows at every step; the twist shows what she really heard",
+    ),
+    CastMember(
+        "avocado", "أفوكادو ابن خالتك", MALE, "Sadachbia",
+        "the show-off cousin back from abroad: mixes English words into every sentence (so basically يعني), "
+        "brags about life outside, looks down on Egyptian food until Teita's cooking wins him over",
+        "إحنا برا بنعمل كده!",
+        "a shiny dark-green avocado cousin with stylish sunglasses, a tiny designer jacket and a phone "
+        "always in his hand, a confident smirk, tiny arms and legs",
+        "the cousin every Egyptian family has; Mama keeps saying 'شوفوا ابن خالتكوا' to the kids",
+        debut="THE COUSIN FROM ABROAD: the avocado cousin visits and compares everything to 'outside'; the "
+              "kids plan to make him admit Egyptian food is the best; the twist makes him the biggest fan "
+              "of Mama's mahshi",
+    ),
+    CastMember(
+        "guava", "جدو جوافة", MALE, "Alnilam",
+        "the grandpa: hard of hearing, so he gets every sentence wrong (the running joke), starts every "
+        "story with 'في أيامنا...', secretly helps the kids against Mama",
+        "في أيامنا كان الكيلو بقرش!",
+        "an old round yellow-green guava grandpa with a white mustache, a flat cap, a wooden walking cane "
+        "and thick glasses, gentle smile, tiny arms and legs",
+        "Teita Garlic's husband; the two argue like a comedy duo",
+        debut="GRANDPA VISITS: Gedo Guava comes to stay and hears every sentence wrong; one tiny "
+              "misunderstanding (a trip heard as a wedding) snowballs into whole-family chaos; the twist "
+              "is warm and funny",
+    ),
+]
+DEBUT_EVERY_DAYS = 9
 
-BY_ID = {c.id: c for c in MAIN + GUESTS}
+GUEST_VOICES = {MALE: ["Charon", "Achird", "Orus", "Iapetus", "Rasalgethi"],
+                FEMALE: ["Aoede", "Zephyr", "Despina", "Callirrhoe", "Autonoe"]}
+
+BY_ID = {c.id: c for c in MAIN + GUESTS + ARRIVALS}
+
+
+def joined(db) -> list[CastMember]:
+    """Arrivals whose debut episode was already written: main cast from then on."""
+    have = (db.get("cast_joined") or {}) if db is not None else {}
+    return [a for a in ARRIVALS if a.id in have]
+
+
+def next_debut(db, today: dt.date) -> CastMember | None:
+    """The next family member to bring in, once the last debut is DEBUT_EVERY_DAYS old (or none yet)."""
+    have = db.get("cast_joined") or {}
+    waiting = [a for a in ARRIVALS if a.id not in have]
+    if not waiting:
+        return None
+    last = max((dt.date.fromisoformat(d) for d in have.values()), default=None)
+    if last and (today - last).days < DEBUT_EVERY_DAYS:
+        return None
+    return waiting[0]
+
+
+def mark_joined(db, member: CastMember, today: dt.date) -> None:
+    have = db.get("cast_joined") or {}
+    have[member.id] = today.isoformat()
+    db.put("cast_joined", have)
+
+
+def main_cast(db=None) -> list[CastMember]:
+    return MAIN + joined(db)
 
 
 def season(today: dt.date | None = None) -> str:
@@ -139,12 +253,15 @@ def gemini_voice(char_id: str, edge_voice: str, taken: set[str]) -> str:
     return free[sum(map(ord, char_id)) % len(free)]
 
 
-def bible_text() -> str:
+def bible_text(db=None, rested: list[str] | None = None) -> str:
     lines = ["MAIN CAST (reuse them; keep personality, catchphrase and relationships):"]
-    for c in MAIN:
+    for c in main_cast(db):
         g = "male" if c.edge == MALE else "female"
         lines.append(f'- id "{c.id}", name "{c.name}", {g}, voice "{c.edge}": {c.personality}. '
                      f'Catchphrase: "{c.catchphrase}". {c.relations}.')
+    if rested:
+        lines.append("SCREEN TIME: these main characters were NOT in the last videos; give one of them a "
+                     "big role this time: " + ", ".join(rested))
     lines.append("POSSIBLE GUESTS right now (at most one per episode, optional):")
     for g in guests_now():
         gg = "male" if g.edge == MALE else "female"
