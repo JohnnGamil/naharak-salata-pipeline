@@ -72,6 +72,7 @@ def run(budget_min: float, s, who: str) -> None:
     extra = int(os.environ.get("EXTRA_VIDEOS") or 0)
     if extra > 0:  # John: "make the new videos now" - raise the queue size for this run only
         app.s.buffer_size = max(app.s.buffer_size, len(app.db.ready_jobs()) + extra)
+        app.db.put("produce_backoff_until", 0)  # asked for now: an earlier hour's pause doesn't apply
         log.info("making %d extra video(s): queue size %d for this run", extra, app.s.buffer_size)
     def snapshot():
         return ([(j["id"], j["status"]) for j in app.pipe.active_jobs()], len(app.db.ready_jobs()),
