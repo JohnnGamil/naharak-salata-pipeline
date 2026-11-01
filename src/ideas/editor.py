@@ -25,7 +25,7 @@ List only REAL mistakes a viewer would notice:
 5. A line nobody understands the first time, or a word used for the wrong meaning.
 6. Something scary or cruel for children actually happens to a character (really eaten, burned, hurt,
    dying). Jokes and fear of it are fine.
-7. An insult or a rude word.
+7. An insult or a rude word (a mum's playful scolding like "يا ولاد الكارثة" or "يا مصيبتي" is fine).
 {vote_rule}Do NOT list style wishes, jokes you would write differently, or Egyptian spelling. "خخخخ" is our snore
 sound (fine). Parts 2 and 3 open with a short recap of the part before (fine).
 
