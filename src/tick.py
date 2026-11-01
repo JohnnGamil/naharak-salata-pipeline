@@ -74,7 +74,7 @@ def run(budget_min: float, s, who: str) -> None:
         app.s.buffer_size = max(app.s.buffer_size, len(app.db.ready_jobs()) + extra)
         log.info("making %d extra video(s): queue size %d for this run", extra, app.s.buffer_size)
     def snapshot():
-        return ([(j["id"], j["status"]) for j in app.db.unfinished_jobs()], len(app.db.ready_jobs()),
+        return ([(j["id"], j["status"]) for j in app.pipe.active_jobs()], len(app.db.ready_jobs()),
                 app.db.q("SELECT MAX(id) AS m FROM jobs")[0]["m"])
 
     while time.time() < end:

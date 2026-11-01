@@ -74,7 +74,9 @@ class App:
 
     def produce(self) -> None:
         ready = len(self.db.ready_jobs())
-        if ready >= self.s.buffer_size and not self.db.unfinished_jobs():
+        # parts waiting for a vote don't count: they kept the queue "unfinished" and production never
+        # stopped (2026-11-01: 4 videos made for a 2-video queue)
+        if ready >= self.s.buffer_size and not self.pipe.active_jobs():
             return
         backoff_until = self.db.get("produce_backoff_until", 0)
         if time.time() < backoff_until:

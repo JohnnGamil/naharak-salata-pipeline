@@ -281,10 +281,14 @@ class Pipeline:
         self.db.put("standalone_since_series", since + 1)
         return self.db.new_job(self.s.video_engine)
 
+    def active_jobs(self) -> list[dict]:
+        """Unfinished jobs that can move now (series parts waiting for the viewers' vote don't)."""
+        from .ideas.vote import gate
+        return [j for j in self.db.unfinished_jobs() if not gate(self, j)]
+
     def produce_one(self) -> int:
         """Resume the oldest unfinished job, or start new work. Returns the job id."""
-        from .ideas.vote import gate
-        pending = [j for j in self.db.unfinished_jobs() if not gate(self, j)]
+        pending = self.active_jobs()
         job_id = pending[0]["id"] if pending else self.plan_next()
         status = self.run_job(job_id)
         log.info("job %d finished as %s", job_id, status)
