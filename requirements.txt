@@ -10,6 +10,7 @@ faster-whisper>=1.1
 numpy>=1.26
 pillow>=10.3
 kaggle>=1.7
+six  # kaggle 2.2.5 imports it without listing it (2026-11-01: every Kaggle call failed on GitHub)
 tzdata
 pytest>=8
 cryptography>=42
