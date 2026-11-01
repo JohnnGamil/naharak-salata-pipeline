@@ -62,6 +62,33 @@ def banned_words(text: str) -> list[str]:
     return sorted(hits)
 
 
+# insults a mum would not let her kids say (2026-11-01: "يا روح أمك" reached a finished video)
+INSULTS = ("روح امك", "ابن الكلب", "يا كلب", "يا حيوان", "يا حمار", "يا بهيم", "يلعن", "تف عليك", "يا زباله",
+           "يا واطي", "يا غبي", "يا غبيه", "اخرس", "اخرسي")
+# a last line that stops on one of these was cut mid-sentence ("... عشان")
+DANGLING = {"عشان", "علشان", "لما", "ما", "و", "بس", "لأن", "لان", "اللي", "يا", "إن", "ان", "لو", "في", "من",
+            "على", "مع", "بقى", "ولا", "او", "أو"}
+
+
+def _norm(text: str) -> str:
+    text = re.sub(r"[ً-ْـ]", "", text)
+    return text.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ة", "ه")
+
+
+def insults(text: str) -> list[str]:
+    t = " " + " ".join(re.findall(r"[ء-ي]+", _norm(text))) + " "
+    return [i for i in INSULTS if f" {_norm(i)} " in t or (" " not in i and f" {_norm(i)}" in t)]
+
+
+def stutter(line: str) -> str | None:
+    """A word said 3+ times in a row ("صينية صينية صينية صينية") is a broken line, not a joke."""
+    ws = re.findall(r"[ء-ي]+", line)
+    for k in range(len(ws) - 2):
+        if ws[k] == ws[k + 1] == ws[k + 2] and len(ws[k]) >= 3 and len(set(ws[k])) > 1:  # خخخخ, لا لا لا are fine
+            return ws[k]
+    return None
+
+
 def clean_tag(t: str) -> str:
     """A hashtag that platforms really link: letters (Arabic/Latin), digits and _ only - a space,
     dash, dot, apostrophe or emoji cuts the link at that point. Not digits-only, at most 30 chars."""
@@ -169,6 +196,17 @@ class Story(BaseModel):
         if bad:
             raise ValueError(f"uses words TikTok flags on a kids channel {bad}; rewrite without any "
                              f"violence, death, weapons, drugs or adult words (say المتهم not القاتل)")
+        rude = insults(" ".join(sc.line_ar for sc in self.scenes))
+        if rude:
+            raise ValueError(f"lines use insults {rude}; this is a family channel, tease kindly instead")
+        for sc in self.scenes:
+            w = stutter(sc.line_ar)
+            if w:
+                raise ValueError(f"a line repeats {w!r} again and again; write a real sentence")
+        tail = re.findall(r"[ء-ي]+", self.scenes[-1].line_ar)
+        if tail and tail[-1] in DANGLING:
+            raise ValueError(f"the last line stops in the middle of a sentence ('{tail[-1]}'); end it on a "
+                             "full sentence (a cliffhanger is a shocking full sentence, not a cut-off word)")
         words = self.word_count
         if not MIN_WORDS <= words <= MAX_WORDS:
             raise ValueError(

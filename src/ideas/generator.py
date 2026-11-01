@@ -71,7 +71,12 @@ Write ONE new skit that BOTH kids and adults enjoy (think Pixar / Bakkar / Bougy
 - If a character snores or sleeps, write the snore in the line as "خخخخ" (a real snore sound is added).
   Use "خخخخ" ONLY for snoring (never for a cough, a laugh or crying).
 - Never invent news that sounds real: no fake weather forecasts, official announcements, prices, dates or
-  "عاجل" breaking news. Jokes come from the characters, not from made-up facts.
+  "عاجل" breaking news. Never say a real price, the weather or anything in the news went up or down
+  ("الفراخ رخصت" is a claim, not a joke). Jokes come from the characters, not from made-up facts.
+- Family channel: characters tease each other kindly. No insults or swearing (never يا روح أمك، يا حمار،
+  يا غبي، اخرس), even from an angry Mama.
+- Every line is a full, clear sentence a viewer understands the first time: never repeat one word over and
+  over, never stop in the middle of a sentence, and the last line ends on a complete sentence.
 - emotion: one of neutral, happy, angry, sad, excited, scared, sarcastic, surprised.
 - caption_ar: short Egyptian Arabic TikTok caption with 1-2 emojis and a question that invites comments.
 - hashtags: exactly 4, Arabic, no '#', no spaces (use _): 1 broad Egyptian one people really search
@@ -96,10 +101,12 @@ STORY_SHAPE = """{{"title": "...", "format": "{fmt}",
 SINGLE_TASK = """LOOP ENDING (this video replays automatically on TikTok/Reels/Shorts; a seamless loop makes
 people watch it twice without noticing - the strongest signal for the algorithm):
 - The LAST line must flow straight back into the FIRST line, as if the video never ended. Write the last
-  line as a set-up that the first line answers or continues, e.g. last: "...ومن ساعتها كل ما حد يفتح التلاجة
-  بيسمع صوت بيقول" -> first: "مين اللي كل الجبنة؟!". Or the last line starts the same situation again.
+  line as a COMPLETE sentence that sets up the first line, e.g. last: "ومن ساعتها كل ما حد يفتح التلاجة
+  بيسمع حد بيصرخ!" -> first: "مين اللي كل الجبنة؟!". Or the last line starts the same situation again.
+- The last line is still a full sentence that makes sense on its own: never cut it on a word like عشان،
+  لما، و، أول ما، and never repeat one word over and over to fake an ending.
 - No goodbye, no "follow us", no question to the viewers in the last line (it breaks the loop); the comment
-  question goes in caption_ar instead. Don't end on a full stop of the story - end mid-flow.
+  question goes in caption_ar instead. The story doesn't wrap up neatly: it opens the same trouble again.
 Return ONLY JSON in exactly this shape:
 """ + STORY_SHAPE
 
@@ -121,7 +128,9 @@ SERIES_TASK = """This time write a MINI-SERIES of exactly 3 parts (3 separate vi
   people reacting to each other, not like they're reading their slogan.
 - VIEWERS DECIDE: part 1 gets a "vote" field: {{"question_ar": "a short Egyptian question", "options":
   ["choice 1", "choice 2"]}} - a real fork in the story (who is the traitor? which plan do they try? who
-  goes into the freezer?). Both choices must lead somewhere fun. Write parts 2 and 3 as if choice 1 wins
+  goes into the freezer?). Both choices must lead somewhere fun. Someone who watched ONLY part 1 must be
+  able to answer: both choices are characters or plans SHOWN in part 1 by name, each with a clue in part 1,
+  and the last line of part 1 leads straight into the question. Choices are 2-4 words each. Write parts 2 and 3 as if choice 1 wins
   (they are rewritten later if choice 2 wins). Parts 2 and 3 have no "vote".
 - Each part must still be funny on its own (someone who only sees one part still laughs).
 - EACH part is a full video on its own: 5-7 scenes and at least 85 words of dialogue PER PART
@@ -253,7 +262,8 @@ class IdeaGenerator:
                 f'id "{member.id}", name "{member.name}", {g}, voice "{member.edge}", look: {member.look}. '
                 f"Personality: {member.personality}. Catchphrase (once): \"{member.catchphrase}\". "
                 f"Relations: {member.relations}. Viewers must love them by the end and want to see them again. "
-                "Add 1-2 of the main cast who react to them.")
+                "Add 1-2 of the main cast who react to them. The new character speaks at least 3 lines, and "
+                "the first line is about THEM (their entrance), so the hook is the debut itself.")
 
     def _library_text(self) -> str:
         chars = self.db.characters()[:10]
@@ -291,7 +301,7 @@ class IdeaGenerator:
             if tr:
                 kind += (f" TODAY'S TREND in Egypt: {tr['topic_en']} (people are searching '{tr['trend']}'). "
                          f"Possible angle: {tr['angle']}. At least 5 of the 10 premises must be about this "
-                         "trend (never about a real person). The video posts today, so it must feel like today.")
+                         "trend (never about a real person). The video posts today, so it must feel like today. Joke about the topic, never claim a fact about it (no \"prices dropped\", no numbers).")
         try:
             raw = self.llm.text(BRAINSTORM.format(fmt=fmt, kind=kind, season=season_hint(),
                                                   bible=self._bible(), recent="; ".join(recent[:30]) or "none"),
@@ -374,8 +384,9 @@ class IdeaGenerator:
                 story = Story.model_validate(extract_json(raw))
                 if story.title in recent:
                     raise ValueError("title repeats a recent video")
-                if self._debut is not None and self._debut.id not in {c.id for c in story.characters}:
-                    raise ValueError(f"the new character {self._debut.id!r} must be in this episode")
+                if self._debut is not None and sum(sc.character_id == self._debut.id for sc in story.scenes) < 3:
+                    raise ValueError(f"the new character {self._debut.id!r} must speak at least 3 lines "
+                                     "in their debut episode")
                 story = proofread(self.llm, [sharpen(self.llm, story, loop=True)])[0]
                 if self._debut is not None:
                     from zoneinfo import ZoneInfo
@@ -388,8 +399,9 @@ class IdeaGenerator:
             except (ValidationError, ValueError, json.JSONDecodeError) as e:
                 log.warning("idea attempt %d invalid: %s", attempt, str(e)[:400])
                 feedback = f"\n\nYour previous answer was rejected: {str(e)[:400]}\nFix it and answer again."
-        log.warning("using offline skit bank")
-        return self.offline(recent)
+        # an old bank skit is a repeat with no new characters (2026-11-01): wait for the writer instead
+        from ..video.base import QuotaWait
+        raise QuotaWait("no good new script yet (Gemini busy or every try rejected); trying again in an hour")
 
     def offline(self, recent: list[str]) -> Story:
         unused = [s for s in SKITS if s["title"] not in recent]

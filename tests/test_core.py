@@ -91,10 +91,11 @@ def test_generator_retries_then_validates(tmp_path):
     assert gen.generate().title == SKITS[2]["title"]
 
 
-def test_generator_falls_back_offline(tmp_path):
+def test_generator_waits_instead_of_reposting_old_skits(tmp_path):
+    from src.video.base import QuotaWait
     db = DB(tmp_path / "t.db")
-    st = IdeaGenerator(FakeLLM([]), db).generate()
-    assert st.title in {s["title"] for s in SKITS}
+    with pytest.raises(QuotaWait):
+        IdeaGenerator(FakeLLM([]), db).generate()
 
 
 def test_library_keeps_recurring_character_look(tmp_path):
@@ -122,22 +123,29 @@ def test_family_debuts_one_at_a_time(tmp_path):
 
 
 def test_hook_doctor_swaps_only_a_clear_winner():
-    from src.ideas.hook import sharpen
+    import re as _re
+    from src.ideas.hook import grounded, sharpen
     st = Story.model_validate(SKITS[0])
+    good, generic, false = ("الحقوا! البصلة بتعيط في الحلة!", "لو عندك أخ صغير، متكملش الفيديو ده",
+                            "البصلة اتجوزت الطماطم امبارح!")
+    assert grounded(good, st) and not grounded(generic, st)
 
-    class L:
-        def __init__(self, reply):
-            self.reply = reply
+    class L:  # the writer, then a judge that only sees shuffled letters
+        def __init__(self, marks, writer=None):
+            self.marks, self.writer = marks, writer
 
-        def text(self, *a, **k):
-            return self.reply
-    win = json.dumps({"candidates": ["الحقوا! حد فتح التلاجة الساعة ٣ الفجر!"],
-                      "scores": [{"i": 0, "stop": 4, "curiosity": 4, "fit": 8, "clarity": 8},
-                                 {"i": 1, "stop": 9, "curiosity": 8, "fit": 8, "clarity": 9}]}, ensure_ascii=False)
-    assert sharpen(L(win), st).scenes[0].line_ar == "الحقوا! حد فتح التلاجة الساعة ٣ الفجر!"
-    tie = win.replace('"stop": 9', '"stop": 4').replace('"curiosity": 8', '"curiosity": 4').replace('"clarity": 9', '"clarity": 8')
-    assert sharpen(L(tie), st).scenes[0].line_ar == st.scenes[0].line_ar
-    assert sharpen(L("garbage"), st).scenes[0].line_ar == st.scenes[0].line_ar
+        def text(self, prompt, **k):
+            if prompt.startswith("You are the hook specialist"):
+                return self.writer or json.dumps({"candidates": [good, generic, false]}, ensure_ascii=False)
+            opts = _re.findall(r'^([A-Z])\. "(.*)"$', prompt, _re.M)
+            return json.dumps({"scores": [{"k": key, **self.marks.get(line, {"true": 1, "stop": 4,
+                               "curiosity": 4, "clarity": 8})} for key, line in opts]}, ensure_ascii=False)
+    top = {"true": 1, "stop": 9, "curiosity": 8, "clarity": 9}
+    win = L({good: top, generic: top, false: {**top, "true": 0, "stop": 10}})
+    assert sharpen(win, st).scenes[0].line_ar == good  # the untrue and the generic line never win
+    tie = L({good: {"true": 1, "stop": 5, "curiosity": 4, "clarity": 8}})
+    assert sharpen(tie, st).scenes[0].line_ar == st.scenes[0].line_ar
+    assert sharpen(L({}, writer="garbage"), st).scenes[0].line_ar == st.scenes[0].line_ar
 
 
 def test_format_rotation():
