@@ -130,8 +130,19 @@ def main() -> int:
     try:
         run(args.budget, s, who)
     finally:
-        state_sync.push(s)
-        state_sync.write_lease(s, who, "done")
+        try:
+            for attempt in range(3):  # a big upload can time out: try again before giving up
+                try:
+                    state_sync.push(s)
+                    break
+                except Exception:
+                    log.exception("state push failed (%d)", attempt + 1)
+                    if attempt == 2:
+                        raise
+                    time.sleep(30)
+        finally:
+            # always hand the turn back: a lease left "running" made GitHub skip every hour (2026-11-01)
+            state_sync.write_lease(s, who, "done")
     return 0
 
 

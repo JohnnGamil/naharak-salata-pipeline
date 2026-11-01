@@ -29,7 +29,10 @@ from .upload import r2
 log = logging.getLogger(__name__)
 
 KEEP_UPLOADED_S = 3 * 86400  # finished videos stay a few days for per-platform retries
-SKIP_PARTS = ("image_candidates", "seg_", "concat.txt", "video.mp4", "voice.wav", ".tmp")
+SKIP_PARTS = ("image_candidates", "seg_", "concat.txt", "video.mp4", "voice.wav", ".tmp",
+              "kaggle_images", "final_cover_intro.mp4")  # the intro copy is rebuilt at post time
+# a posted video only needs what a per-platform retry uses: the state was 365 MB and the PC upload timed out
+POSTED_KEEP = ("final.mp4", "cover.jpg", ".json")
 
 
 def _fernet(key: str) -> Fernet:
@@ -74,6 +77,14 @@ def write_lease(s, owner: str, note: str = "") -> None:
 
 
 # --- pack / unpack ---------------------------------------------------------------
+def _uploaded(db_path: Path) -> set[int]:
+    con = sqlite3.connect(db_path)
+    try:
+        return {i for (i,) in con.execute("SELECT id FROM jobs WHERE status='UPLOADED'")}
+    finally:
+        con.close()
+
+
 def _jobs_to_keep(db_path: Path) -> list[int]:
     con = sqlite3.connect(db_path)
     try:
@@ -105,11 +116,17 @@ def pack(s) -> bytes:
             tar.addfile(info, io.BytesIO(man))
             if s.cache_dir.exists():
                 tar.add(s.cache_dir, "cache")
+            posted = _uploaded(snap)
             for jid in _jobs_to_keep(snap):
                 d = s.jobs_dir / f"{jid:05d}"
                 if d.exists():
-                    tar.add(d, f"jobs/{d.name}",
-                            filter=lambda ti: None if any(p in ti.name for p in SKIP_PARTS) else ti)
+                    def keep(ti, done=jid in posted):
+                        if any(p in ti.name for p in SKIP_PARTS):
+                            return None
+                        if done and ti.isfile() and not ti.name.endswith(POSTED_KEEP):
+                            return None
+                        return ti
+                    tar.add(d, f"jobs/{d.name}", filter=keep)
     finally:
         snap.unlink(missing_ok=True)
     return buf.getvalue()
