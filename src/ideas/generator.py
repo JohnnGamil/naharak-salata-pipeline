@@ -28,8 +28,8 @@ Write ONE new skit that BOTH kids and adults enjoy (think Pixar / Bakkar / Bougy
 - Jokes work on two levels: silly and visual for kids, relatable Egyptian everyday life for adults
   (mom's cooking, the fridge, the market, prices, school, exams, Ramadan, summer, family visits).
 - HOOK = the FIRST line (first 2 seconds), at most 9 words, said fast. Start IN the problem, never before it:
-  a disaster already happening ("ماما لقت الفلوس!"), a secret about to come out, a line that talks to the
-  viewer's own life ("لو عندك أخ صغير متكملش الفيديو ده"), an impossible claim, or a panic with a reason.
+  a disaster already happening, a secret about to come out, a line that talks to the viewer's own life,
+  an impossible claim, or a panic with a reason - always about THIS story, in your own words.
   It opens a question only the end answers. Never a greeting, never an introduction of who is talking.
   The first picture is the most striking one (extreme close-up of the shocked face, or the chaos itself).
 - Line 2 lands within 3 seconds and makes it WORSE (raises the stakes) - nobody leaves after line 2.
@@ -39,6 +39,16 @@ Write ONE new skit that BOTH kids and adults enjoy (think Pixar / Bakkar / Bougy
   فاتورة الكهربا، الريموت). Comedy comes from WHO the characters are (the lazy one solves it lazily, the
   drama queen makes it a catastrophe). Call back to an early line in the ending. The twist must be
   surprising but obvious in hindsight.
+- SURPRISE US (John, 2026-11-03: "not every character the same every time - always sleeping, always
+  crying"): a personality is where a character STARTS, not a cage. Show a NEW side each video: the lazy
+  potato can have the genius plan, the drama queen can be the coolest one in the room, the scaredy-cat can
+  be the brave one. Sleeping, crying or shouting is never the whole joke. Never repeat a recent video's idea.
+- ENERGY: a real verbal fight (خناقة) with fast back-and-forth comebacks (تلقيح كلام، ردح خفيف من غير شتيمة)
+  and a cool, laid-back (رايق، فاكك) character who drops the best lines. At least TWO strong إفيهات in the
+  MIDDLE of the video, not only at the end: a sharp comeback, a crazy Egyptian comparison, a twisted مثل
+  شعبي, a callback. Pick a fresh story engine each time: a roast battle, a fake TV show or interview, a
+  heist plan, a talent show, a court case, a fake ad, a wedding negotiation (قعدة الرجالة), a phone call
+  gone wrong, a WhatsApp family group drama...
 - Something changes every scene (new emotion, new action or new place) so the video never feels static.
 - End with a punchline or twist, and sometimes a question to the viewers to make them comment.
 - Genre/format: {fmt}  (drama = emotional twist, comedy = jokes, advice = useful kitchen/health tip,
@@ -62,7 +72,7 @@ Write ONE new skit that BOTH kids and adults enjoy (think Pixar / Bakkar / Bougy
 - One speaking character per scene. 1-3 characters, mostly from the MAIN CAST below; at most one guest.
   When a line talks about ماما or بابا and they are in the MAIN CAST, they can be IN the video (better
   than only talking about them). Never write human characters: the whole family is fruits and vegetables.
-  Use each character's catchphrase about once when it fits. First scene must be a strong hook.
+  Catchphrases are RARE: at most one in the whole video, and none from a character listed as TIRED. First scene must be a strong hook.
   Last scene: see the ending rules at the end (loop for a single video, cliffhanger for a series).
 - Each character gets a voice: "ar-EG-ShakirNeural" (male) or "ar-EG-SalmaNeural" (female).
 - character "look": copy the cast's look; for a brand-new character write an English visual description
@@ -248,8 +258,23 @@ class IdeaGenerator:
                 pass
         return [f'{c.name} ("{c.id}")' for c in cast.main_cast(self.db) if c.id not in seen]
 
+    def _tired(self, n: int = 5) -> list[str]:
+        """Characters whose catchphrase was said in the last n videos: give it a rest."""
+        out: list[str] = []
+        for row in self.db.q("SELECT story_json FROM jobs WHERE story_json IS NOT NULL ORDER BY id DESC LIMIT ?",
+                             (n,)):
+            try:
+                text = " ".join(sc["line_ar"] for sc in json.loads(row["story_json"]).get("scenes", []))
+            except (ValueError, TypeError, KeyError):
+                continue
+            for c in cast.main_cast(self.db):
+                key = " ".join(c.catchphrase.split()[:3]).strip("!؟?. ")
+                if key and key in text and c.name not in out:
+                    out.append(c.name)
+        return out
+
     def _bible(self) -> str:
-        return cast.bible_text(self.db, self._rested())
+        return cast.bible_text(self.db, self._rested(), self._tired())
 
     def _debut_premise(self) -> str:
         """Every DEBUT_EVERY_DAYS a new family member gets their own entrance episode."""

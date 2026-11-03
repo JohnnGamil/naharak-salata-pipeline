@@ -253,8 +253,9 @@ def gemini_voice(char_id: str, edge_voice: str, taken: set[str]) -> str:
     return free[sum(map(ord, char_id)) % len(free)]
 
 
-def bible_text(db=None, rested: list[str] | None = None) -> str:
-    lines = ["MAIN CAST (reuse them; keep personality, catchphrase and relationships):"]
+def bible_text(db=None, rested: list[str] | None = None, tired: list[str] | None = None) -> str:
+    lines = ["MAIN CAST (reuse them; keep their relationships; the personality is their starting point, "
+             "surprise us with a new side of them):"]
     for c in main_cast(db):
         g = "male" if c.edge == MALE else "female"
         lines.append(f'- id "{c.id}", name "{c.name}", {g}, voice "{c.edge}": {c.personality}. '
@@ -262,6 +263,9 @@ def bible_text(db=None, rested: list[str] | None = None) -> str:
     if rested:
         lines.append("SCREEN TIME: these main characters were NOT in the last videos; give one of them a "
                      "big role this time: " + ", ".join(rested))
+    if tired:
+        lines.append("TIRED (said their catchphrase in the last videos - not this time, and no repeat of "
+                     "their usual habit as the joke): " + ", ".join(tired))
     lines.append("POSSIBLE GUESTS right now (at most one per episode, optional):")
     for g in guests_now():
         gg = "male" if g.edge == MALE else "female"
