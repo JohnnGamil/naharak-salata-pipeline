@@ -113,7 +113,7 @@ def _total(sc: dict) -> float:
 
 def sharpen(llm, story, loop: bool = True):
     """Return the story with a stronger first line when one clearly wins (else unchanged)."""
-    from .schema import Story
+    from .schema import Story, check_writing
     first, second = story.scenes[0], story.scenes[1] if len(story.scenes) > 1 else story.scenes[0]
     speaker = story.char(first.character_id).name
 
@@ -169,7 +169,7 @@ def sharpen(llm, story, loop: bool = True):
         data = story.model_dump()
         data["scenes"][0]["line_ar"] = line
         try:
-            new = Story.model_validate(data)  # word count, banned words and فصحى are checked again
+            new = check_writing(Story.model_validate(data))  # word count, banned words and فصحى are checked again
         except ValueError as e:
             log.info("hook candidate rejected (%s): %s", str(e)[:80], line)
             continue

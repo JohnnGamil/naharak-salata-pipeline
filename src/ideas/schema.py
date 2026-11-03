@@ -196,17 +196,6 @@ class Story(BaseModel):
         if bad:
             raise ValueError(f"uses words TikTok flags on a kids channel {bad}; rewrite without any "
                              f"violence, death, weapons, drugs or adult words (say المتهم not القاتل)")
-        rude = insults(" ".join(sc.line_ar for sc in self.scenes))
-        if rude:
-            raise ValueError(f"lines use insults {rude}; this is a family channel, tease kindly instead")
-        for sc in self.scenes:
-            w = stutter(sc.line_ar)
-            if w:
-                raise ValueError(f"a line repeats {w!r} again and again; write a real sentence")
-        tail = re.findall(r"[ء-ي]+", self.scenes[-1].line_ar)
-        if (tail and tail[-1] in DANGLING) or re.search(r"(\.\.|…|:)\s*$", self.scenes[-1].line_ar):
-            raise ValueError(f"the last line stops in the middle of a sentence ('{tail[-1]}'); end it on a "
-                             "full sentence (a cliffhanger is a shocking full sentence, not a cut-off word)")
         words = self.word_count
         if not MIN_WORDS <= words <= MAX_WORDS:
             raise ValueError(
@@ -225,3 +214,21 @@ class Story(BaseModel):
     def full_caption(self) -> str:
         tags = " ".join(f"#{t}" for t in self.hashtags)
         return f"{self.caption_ar}\n\n{tags}".strip()[:2000]
+
+
+def check_writing(story: "Story") -> "Story":
+    """New-script checks (insults, stuttered words, a cut-off last line). Run only on freshly written
+    scripts: inside the model validator they made already-made videos fail to load (2026-11-03: the
+    15:00 post crashed on video 30's ending)."""
+    rude = insults(" ".join(sc.line_ar for sc in story.scenes))
+    if rude:
+        raise ValueError(f"lines use insults {rude}; this is a family channel, tease kindly instead")
+    for sc in story.scenes:
+        w = stutter(sc.line_ar)
+        if w:
+            raise ValueError(f"a line repeats {w!r} again and again; write a real sentence")
+    tail = re.findall(r"[ء-ي]+", story.scenes[-1].line_ar)
+    if (tail and tail[-1] in DANGLING) or re.search(r"(\.\.|…|:)\s*$", story.scenes[-1].line_ar):
+        raise ValueError(f"the last line stops in the middle of a sentence ('{tail[-1]}'); end it on a "
+                         "full sentence (a cliffhanger is a shocking full sentence, not a cut-off word)")
+    return story

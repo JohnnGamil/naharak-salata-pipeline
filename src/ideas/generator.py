@@ -15,7 +15,7 @@ from ..config import get_settings
 from .editor import problems
 from .hook import sharpen
 from .proofread import proofread
-from .schema import FORMATS, MAX_WORDS, MIN_WORDS, VOICES, Story
+from .schema import FORMATS, MAX_WORDS, MIN_WORDS, VOICES, Story, check_writing
 
 log = logging.getLogger(__name__)
 
@@ -385,7 +385,7 @@ class IdeaGenerator:
                 stories = []
                 for k, part in enumerate(parts, 1):
                     try:
-                        stories.append(self._apply_library(Story.model_validate(part)))
+                        stories.append(self._apply_library(check_writing(Story.model_validate(part))))
                     except ValidationError as e:
                         raise ValueError(f"part {k}: {e}") from e
                 stories[0] = sharpen(self.llm, stories[0], loop=False)
@@ -412,7 +412,7 @@ class IdeaGenerator:
         for attempt in range(1, self.max_attempts + 1):
             try:
                 raw = self.llm.text(prompt + feedback, json_mode=True, temperature=1.0, writer=True)
-                story = Story.model_validate(extract_json(raw))
+                story = check_writing(Story.model_validate(extract_json(raw)))
                 if story.title in recent:
                     raise ValueError("title repeats a recent video")
                 if self._debut is not None and sum(sc.character_id == self._debut.id for sc in story.scenes) < 3:
