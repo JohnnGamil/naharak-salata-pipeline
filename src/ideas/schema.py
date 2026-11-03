@@ -204,7 +204,7 @@ class Story(BaseModel):
             if w:
                 raise ValueError(f"a line repeats {w!r} again and again; write a real sentence")
         tail = re.findall(r"[ء-ي]+", self.scenes[-1].line_ar)
-        if (tail and tail[-1] in DANGLING) or re.search(r"(\.\.|…)\s*$", self.scenes[-1].line_ar):
+        if (tail and tail[-1] in DANGLING) or re.search(r"(\.\.|…|:)\s*$", self.scenes[-1].line_ar):
             raise ValueError(f"the last line stops in the middle of a sentence ('{tail[-1]}'); end it on a "
                              "full sentence (a cliffhanger is a shocking full sentence, not a cut-off word)")
         words = self.word_count
