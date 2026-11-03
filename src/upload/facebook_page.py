@@ -61,8 +61,14 @@ class FacebookPageUploader(Uploader):
                 "description": caption[:2200], "access_token": token}), "reels publish")
             started = time.time()
             while time.time() - started < self.timeout_s:  # wait so the remote file can be deleted
-                st = self._check(httpx.get(f"{GRAPH}/{vid}", timeout=30,
-                                           params={"fields": "status", "access_token": token}), "status")
+                try:
+                    st = self._check(httpx.get(f"{GRAPH}/{vid}", timeout=30,
+                                               params={"fields": "status", "access_token": token}), "status")
+                except UploadError as e:
+                    # the publish call already succeeded; a status read that Facebook refuses (code 100,
+                    # 2026-11-03) must not mark a live reel as failed and ask John for help
+                    log.warning("facebook status check failed after publish, assuming live: %s", e)
+                    break
                 status = st.get("status", {})
                 if status.get("video_status") == "ready" or (status.get("publishing_phase") or {}).get("status") == "complete":
                     break
