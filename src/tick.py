@@ -13,6 +13,7 @@ import logging
 import os
 import sys
 import time
+from zoneinfo import ZoneInfo
 
 from . import state_sync
 from .config import get_settings
@@ -123,7 +124,11 @@ def main() -> int:
     who = s.runner
     if args.backup:
         ls = state_sync.lease(s)
-        if ls.get("owner") == "github" and time.time() - ls.get("ts", 0) < args.stale * 3600:
+        # GitHub has no runs 00:17-07:17 Cairo by design: that gap is not "GitHub stopped" (2026-11-07 the PC
+        # woke at 03:00, said GitHub was down and failed every job)
+        hour = dt.datetime.now(ZoneInfo(s.timezone)).hour
+        quiet = 7.5 * 3600 if hour < 8 else 0
+        if ls.get("owner") == "github" and time.time() - ls.get("ts", 0) < args.stale * 3600 + quiet:
             log.info("GitHub ran %.0f min ago - PC stays idle", (time.time() - ls["ts"]) / 60)
             return 0
         who = "pc"

@@ -58,6 +58,23 @@ def setup_logging(data_dir: Path, level: str = "INFO") -> None:
     root._pipeline_configured = True  # type: ignore[attr-defined]
 
 
+def _ensure_ffmpeg_on_path() -> None:
+    """The PC backup starts from the Startup folder, whose PATH can miss the winget ffmpeg (2026-11-07:
+    every night job failed with "The system cannot find the file specified"). Add it when missing."""
+    import os
+    import shutil
+    if shutil.which("ffmpeg") or sys.platform != "win32":
+        return
+    base = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet"
+    for exe in [base / "Links" / "ffmpeg.exe", *sorted((base / "Packages").glob("*FFmpeg*/*/bin/ffmpeg.exe"))]:
+        if exe.exists():
+            os.environ["PATH"] = str(exe.parent) + os.pathsep + os.environ.get("PATH", "")
+            return
+
+
+_ensure_ffmpeg_on_path()
+
+
 class RetryableError(Exception):
     """Transient failure worth retrying (network, 5xx, rate limit)."""
 
