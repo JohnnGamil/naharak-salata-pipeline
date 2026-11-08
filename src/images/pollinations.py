@@ -122,9 +122,22 @@ class ImageGen:
                 break
             time.sleep(8 * (attempt + 1))
         meta = {"eyes": face["eyes"]}
-        if face["mouth"] is None:
+        eyes = [e for e in face["eyes"] if e and len(e) == 4]
+        if face["mouth"] is None and len(eyes) != 2:
             return {**meta, "mouth": [0.42, 0.50, 0.58, 0.56], "guessed": True}
-        x0, y0, x1, y1 = face["mouth"]
+        # no mouth seen but both eyes: the mouth is drawn under them (a talking face never stays still)
+        x0, y0, x1, y1 = face["mouth"] or (0.0, 0.0, 0.0, 0.0)
+        if len(eyes) == 2:
+            # the mouth sits under the eyes and between them; a box elsewhere (2026-11-08: a speck at the
+            # picture's edge on a close-up with no mouth visible) gets a mouth drawn where it belongs
+            ex0, ex1 = min(e[0] for e in eyes), max(e[2] for e in eyes)
+            ey1 = max(e[3] for e in eyes)
+            cx, span = (ex0 + ex1) / 2, ex1 - ex0
+            mx = (x0 + x1) / 2
+            if abs(mx - cx) > span * 0.45 or y0 < ey1 or (x1 - x0) < span * 0.15:
+                w, top = max(0.08, span * 0.45), min(0.9, ey1 + span * 0.35)
+                x0, x1, y0, y1 = cx - w / 2, cx + w / 2, top, top + w * 0.35
+                return {**meta, "mouth": [x0, y0, x1, y1], "face_found": True, "mouth_from_eyes": True}
         if x1 - x0 > 0.6:
             return {**meta, "mouth": [0.42, 0.50, 0.58, 0.56], "guessed": True}
         if y1 - y0 < 0.02:  # very thin boxes (closed lips) -> give the animated mouth some room
