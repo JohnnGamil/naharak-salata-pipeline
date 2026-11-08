@@ -53,6 +53,7 @@ jobs:
         run: |
           printf '%s\n' "$ENV_FILE" > .env
           echo "RUNNER=github" >> .env
+          echo "BUFFER_SIZE=3" >> .env  # keep 3 videos ready (the secret still says 2)
           if [ "${{ github.event.inputs.dry }}" = "true" ]; then
             echo "STATE_NS=dryrun" >> .env
             echo "UPLOAD_ENABLED=false" >> .env

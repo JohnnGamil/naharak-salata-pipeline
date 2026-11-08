@@ -695,3 +695,52 @@ def test_occasions_calendar_and_once_a_year(tmp_path):
     assert "WINTER time" in premise_for(db, tz, dt.date(2026, 10, 28))
     assert premise_for(db, tz, dt.date(2026, 10, 29)) == ""  # used once
     assert premise_for(db, tz, dt.date(2026, 11, 10)) == ""  # nothing near
+
+
+# --- guards for the mistakes of 2026-11-01..08 ---------------------------------------
+def test_made_videos_still_load_after_new_writing_rules():
+    # a made video whose last line breaks a newer writing rule must still load and post
+    from src.ideas.schema import check_writing
+    s = copy.deepcopy(SKITS[0])
+    s["scenes"][-1]["line_ar"] = "خليك جاهز عشان هي دخلت تسأل وتقول:"
+    st = Story.model_validate(s)
+    with pytest.raises(ValueError):
+        check_writing(st)
+
+
+def test_writing_rules_catch_stutter_insults_and_cut_endings():
+    from src.ideas.schema import check_writing
+    for last in ("صينية صينية صينية صينية", "تعالى لي يا روح أمك يا بطاطس", "أنا هقولكوا عشان"):
+        s = copy.deepcopy(SKITS[0])
+        s["scenes"][-1]["line_ar"] = last
+        with pytest.raises(ValueError):
+            check_writing(Story.model_validate(s))
+
+
+def test_mouth_goes_under_the_eyes(monkeypatch):
+    from src.images.pollinations import ImageGen
+    g = ImageGen.__new__(ImageGen)
+    g.llm = None
+    eyes = [[0.37, 0.33, 0.51, 0.40], [0.55, 0.28, 0.68, 0.34]]
+    for found in ([0.79, 0.55, 0.83, 0.58], None):  # a speck at the edge, or no mouth seen at all
+        monkeypatch.setattr(g, "locate_face", lambda img, f=found: {"mouth": f, "eyes": eyes}, raising=False)
+        monkeypatch.setattr("src.images.pollinations.Image.open", lambda p: None)
+        m = g.locate_mouth(Path("x.jpg"))
+        cx = (m["mouth"][0] + m["mouth"][2]) / 2
+        assert m.get("face_found") and 0.45 < cx < 0.6 and m["mouth"][1] > 0.40
+
+
+def test_pc_backup_sleeps_in_githubs_night_gap():
+    src = Path("src/tick.py").read_text(encoding="utf-8")
+    assert "quiet = 7.5 * 3600 if hour < 8 else 0" in src
+
+
+def test_ffmpeg_found_on_windows_without_path(monkeypatch):
+    import sys as _sys
+    import src.util as u
+    if _sys.platform != "win32":
+        return
+    monkeypatch.setenv("PATH", r"C:\Windows\System32")
+    u._ensure_ffmpeg_on_path()
+    import shutil
+    assert shutil.which("ffmpeg")

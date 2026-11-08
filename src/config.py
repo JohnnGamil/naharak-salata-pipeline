@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     posts_per_day: int = 2
     post_windows: str = "13:00-15:00,20:00-23:00"
     timezone: str = "Africa/Cairo"
-    buffer_size: int = 2
+    buffer_size: int = 3  # a day of failures must not empty the queue (2026-11-07: no post all day)
     upload_enabled: bool = True
 
     # --- quality / retries -----------------------------------------------

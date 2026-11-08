@@ -440,8 +440,19 @@ class Pipeline:
             self.tg.send("⚠️ Posting slot reached but no video is ready (buffer empty).",
                          throttle_key="buffer_empty", throttle_s=3 * 3600)
             return None
-        job = ready[0]
-        story = self.story(job["id"])
+        job = story = None
+        for cand in ready:  # one broken video must never block the slot (2026-11-03 a crash here)
+            try:
+                if not Path(cand["video_path"] or "").exists():
+                    raise FileNotFoundError(f"video file missing: {cand['video_path']}")
+                story, job = self.story(cand["id"]), cand
+                break
+            except Exception as e:  # noqa: BLE001
+                log.exception("job %d cannot be posted", cand["id"])
+                self._fail(cand["id"], "POST", f"cannot be posted: {e}")
+                self.tg.send(f"⚠️ فيديو #{cand['id']} اتشال من الطابور ({str(e)[:200]}) - هنزل اللي بعده")
+        if job is None:
+            return None
         results = {}
         for platform, up in self.uploaders().items():
             done = self.db.post(job["id"], platform)
