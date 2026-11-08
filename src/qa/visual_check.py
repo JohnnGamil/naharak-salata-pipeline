@@ -50,8 +50,9 @@ def sample_frames(path: Path, n: int = 6, width: int = 480) -> list[bytes]:
 
 # The CPU engine animates one still per character (mouth flap, zoom, bounce): it cannot act out
 # "faints" or "waves", so judging it on literal actions fails every video (seen: matches_scene 3-5).
-FALLBACK_NOTE = ("This video is a simple 2D animation of still character pictures (zoom, bounce, mouth "
-                 "movement). Do NOT expect the characters to perform the scene actions; judge "
+FALLBACK_NOTE = ("This video is a simple 2D animation of still character pictures (zoom, bounce, and a "
+                 "drawn mouth that opens and closes over the picture - that is our channel's style, never a "
+                 "problem). Do NOT expect the characters to perform the scene actions; judge "
                  "matches_scene only on whether the right characters appear.")
 
 

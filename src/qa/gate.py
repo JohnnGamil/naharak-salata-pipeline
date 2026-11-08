@@ -26,7 +26,10 @@ def run_qa(video: Path, story, settings, llm, engine: str = "kaggle") -> dict:
     if not res["audio"]["passed"]:
         res.update(passed=False, failed_part="audio")
         return res
-    res["visual"] = visual_check.check(video, story, llm, settings.qa_visual_min_score,
+    # the still-picture engine tops out around 6-7 on looks alone (2026-11-07: a whole day of good videos
+    # thrown away for "2D mouth overlays"); deformed or wrong pictures still score far lower
+    floor = settings.qa_visual_min_score - (1 if engine == "fallback" else 0)
+    res["visual"] = visual_check.check(video, story, llm, floor,
                                        settings.qa_require_visual, engine)
     if not res["visual"]["passed"]:
         res.update(passed=False, failed_part="visual")
