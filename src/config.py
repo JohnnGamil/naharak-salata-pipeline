@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     gemini_models: str = "gemini-3.5-flash,gemini-flash-lite-latest,gemini-flash-latest"
     # the writers (ideas, scripts, hooks) only: a lite model writes flat, too-short skits, so they wait for
     # one of these instead (2026-11-01: 3.5-flash gave ~10 calls a day, the rest went to flash-lite)
-    gemini_writer_models: str = "gemini-3.5-flash,gemini-3-flash-preview,gemini-3.6-flash"
+    gemini_writer_models: str = "gemini-3.5-flash,gemini-3-flash-preview,gemini-3.6-flash,gemini-3.7-flash,gemini-3.8-flash"
     pollinations_key: str = ""  # optional sk_ key; empty = legacy anonymous endpoint
     pollinations_image_model: str = "flux"
     # voice: "gemini" (natural Egyptian delivery, free) with edge-tts fallback, or "edge"
