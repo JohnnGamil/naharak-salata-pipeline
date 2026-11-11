@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # --- keys -------------------------------------------------------------
     gemini_api_key: str = ""
     # comma separated, tried in order (free-tier model names change often)
-    gemini_models: str = "gemini-3.5-flash,gemini-flash-lite-latest,gemini-flash-latest"
+    gemini_models: str = "gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.8-flash,gemini-3.7-flash"
     # the writers (ideas, scripts, hooks) only: a lite model writes flat, too-short skits, so they wait for
     # one of these instead (2026-11-01: 3.5-flash gave ~10 calls a day, the rest went to flash-lite)
     gemini_writer_models: str = "gemini-3.5-flash,gemini-3-flash-preview,gemini-3.6-flash,gemini-3.7-flash,gemini-3.8-flash"

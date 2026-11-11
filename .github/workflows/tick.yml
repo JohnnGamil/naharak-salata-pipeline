@@ -54,6 +54,7 @@ jobs:
           printf '%s\n' "$ENV_FILE" > .env
           echo "RUNNER=github" >> .env
           echo "BUFFER_SIZE=3" >> .env  # keep 3 videos ready (the secret still says 2)
+          echo "GEMINI_MODELS=gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.8-flash,gemini-3.7-flash" >> .env  # flash-latest / flash-lite-latest answer 404 since 2026-11-10
           if [ "${{ github.event.inputs.dry }}" = "true" ]; then
             echo "STATE_NS=dryrun" >> .env
             echo "UPLOAD_ENABLED=false" >> .env
