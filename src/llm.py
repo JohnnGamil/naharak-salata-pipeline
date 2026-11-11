@@ -1,4 +1,4 @@
-"""Text/vision LLM access: Gemini first (model list fallback), Pollinations text second."""
+"""Text/vision LLM access: Gemini first (model list fallback), Cloudflare gpt-oss second, Pollinations last."""
 from __future__ import annotations
 
 import json
@@ -87,6 +87,23 @@ class LLM:
                 log.warning("gemini %s failed: %s", model, msg[:300])
         raise LLMUnavailable(f"all Gemini models failed: {last}")
 
+    @net_retry(attempts=2)
+    def _cloudflare_text(self, prompt: str, json_mode: bool, temperature: float) -> str:
+        """gpt-oss-120b on Workers AI (2026-11-11): a second brain when every Gemini model is down."""
+        url = f"https://api.cloudflare.com/client/v4/accounts/{self.s.cloudflare_account_id}/ai/v1/chat/completions"
+        body = {"model": self.s.cloudflare_text_model, "messages": [{"role": "user", "content": prompt}],
+                "temperature": temperature, "max_tokens": 4000}
+        r = httpx.post(url, json=body, timeout=150, headers={"Authorization": f"Bearer {self.s.cloudflare_api_token}"})
+        if r.status_code >= 500 or (r.status_code == 429 and "daily" not in r.text):
+            raise RetryableError(f"cloudflare text {r.status_code}")
+        r.raise_for_status()
+        text = (r.json()["choices"][0]["message"].get("content") or "").strip()
+        if not text:
+            raise RetryableError("cloudflare text returned nothing")
+        if json_mode:
+            extract_json(text)  # raises when the answer is not JSON
+        return text
+
     @net_retry(attempts=3)
     def _pollinations_text(self, prompt: str, json_mode: bool, temperature: float) -> str:
         messages = [{"role": "user", "content": prompt}]
@@ -131,7 +148,12 @@ class LLM:
             try:
                 return self._gemini_call(prompt, json_mode, temperature)
             except LLMUnavailable as e:
-                log.warning("falling back to Pollinations text: %s", e)
+                log.warning("Gemini down, trying Cloudflare text: %s", str(e)[:150])
+        if self.s.cloudflare_account_id and self.s.cloudflare_api_token:
+            try:
+                return self._cloudflare_text(prompt, json_mode, temperature)
+            except Exception as e:
+                log.warning("falling back to Pollinations text: %s", str(e)[:150])
         try:
             return self._pollinations_text(prompt, json_mode, temperature)
         except Exception as e:

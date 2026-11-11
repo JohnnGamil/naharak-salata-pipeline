@@ -34,6 +34,7 @@ class Settings(BaseSettings):
                               "gemini-3.8-flash-tts:Leda,gemini-3.8-flash-lite-tts:Leda")
     cloudflare_account_id: str = ""  # Workers AI free daily allowance (FLUX schnell, ~2 s a picture)
     cloudflare_api_token: str = ""
+    cloudflare_text_model: str = "@cf/openai/gpt-oss-120b"
     cloudflare_image_model: str = "@cf/black-forest-labs/flux-1-schnell"
     # AI Horde: volunteer GPUs, no sign-up ("0000000000" = anonymous, lowest queue priority)
     horde_api_key: str = "0000000000"
