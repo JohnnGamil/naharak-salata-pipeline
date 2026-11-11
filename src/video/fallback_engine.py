@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-from . import face
+from . import face, visemes
 from .base import FPS, H, W, SceneSpec, VideoEngine
 
 log = logging.getLogger(__name__)
@@ -24,6 +24,8 @@ log = logging.getLogger(__name__)
 OVERSCAN = 1.14  # base canvas is bigger than the output so we can zoom/pan/bounce
 BW, BH = int(W * OVERSCAN) // 2 * 2, int(H * OVERSCAN) // 2 * 2
 MOUTH_LEVELS = (0.0, 0.35, 0.7, 1.0)
+LEVEL_SHAPE = ("X", "B", "A", "A2")  # loudness level -> mouth shape when the words are unknown
+ROUGH_LEVEL = {"X": 0.0, "M": 0.0, "B": 0.35, "E": 0.35, "O": 0.35, "F": 0.35, "A": 0.7, "A2": 1.0}
 
 
 def cover(im: Image.Image, w: int, h: int) -> Image.Image:
@@ -124,28 +126,29 @@ class FallbackEngine(VideoEngine):
     def __init__(self, preset: str = "veryfast"):
         self.preset = preset
 
-    def _bases(self, spec: SceneSpec) -> dict[tuple[int, int], Image.Image]:
-        """(mouth level, blink level) -> overscanned frame base."""
+    def _bases(self, spec: SceneSpec, shapes) -> dict[tuple[str, int], Image.Image]:
+        """(mouth shape, blink level) -> overscanned frame base, for the shapes this scene uses."""
         src = Image.open(spec.image).convert("RGB")
         box_n = spec.meta.get("mouth", [0.42, 0.50, 0.58, 0.56])
         box = cover_box(src.width, src.height, box_n, BW, BH)
         base = cover(src, BW, BH)
         eyes = [cover_box(src.width, src.height, e, BW, BH) for e in spec.meta.get("eyes") or []]
-        if spec.meta.get("guessed"):
-            # mouth position unknown (no vision model): a mouth in the wrong place looks worse
-            # than none, so the character "talks" with squash-and-stretch only
-            mouths = [base] * len(MOUTH_LEVELS)
-        elif spec.meta.get("procedural"):  # the PIL cartoon has no mouth of its own to erase
-            skin = tuple(spec.meta.get("skin") or _skin_color(base, box))
-            mouths = [draw_mouth(base, box, lv, skin, erase=False) for lv in MOUTH_LEVELS]
-        else:  # erase the picture's mouth, draw one shaped by the emotion (no grin while crying)
-            rgba = base.convert("RGBA")
-            skin = face._ring_color(rgba, box)
-            mouths = [face.draw_mouth(rgba, box, lv, spec.emotion, skin).convert("RGB") for lv in MOUTH_LEVELS]
+        mouths = {}
+        for sh in sorted(set(shapes)):
+            if spec.meta.get("guessed"):
+                # mouth position unknown (no vision model): a mouth in the wrong place looks worse
+                # than none, so the character "talks" with squash-and-stretch only
+                mouths[sh] = base
+            elif spec.meta.get("procedural"):  # the PIL cartoon has no mouth of its own to erase
+                skin = tuple(spec.meta.get("skin") or _skin_color(base, box))
+                mouths[sh] = draw_mouth(base, box, ROUGH_LEVEL[sh], skin, erase=False)
+            else:  # erase the picture's mouth, draw the one for this sound (shaped by the emotion)
+                rgba = base.convert("RGBA")
+                mouths[sh] = face.draw_shape(rgba, box, sh, spec.emotion, face._ring_color(rgba, box)).convert("RGB")
         out = {}
-        for li, m in enumerate(mouths):
+        for sh, m in mouths.items():
             for bi, amount in enumerate(face.BLINK_LEVELS):
-                out[(li, bi)] = (m if bi == 0 or not eyes
+                out[(sh, bi)] = (m if bi == 0 or not eyes
                                  else face.draw_blink(m.convert("RGBA"), eyes, amount).convert("RGB"))
         return out
 
@@ -170,9 +173,13 @@ class FallbackEngine(VideoEngine):
     def render_scene(self, spec: SceneSpec, out: Path, seed: int = 0) -> Path:
         n = max(1, round(spec.duration * FPS))
         rms = read_rms(spec.audio, n)
-        states = mouth_states(rms)
+        words = spec.extra.get("words")
+        if words:  # the mouth makes the shape of each letter being said
+            shapes = visemes.frame_shapes(visemes.timeline(words), rms, FPS)
+        else:
+            shapes = [LEVEL_SHAPE[int(s)] for s in mouth_states(rms)]
         env = np.convolve(rms, np.ones(4) / 4, mode="same")
-        bases = self._bases(spec)
+        bases = self._bases(spec, shapes)
         rnd = random.Random(seed * 1000 + spec.index)
         blinks, tb = [], rnd.uniform(0.6, 1.6)
         while tb < spec.duration:
@@ -205,7 +212,7 @@ class FallbackEngine(VideoEngine):
                     k = int((t - b) * FPS)
                     if 0 <= k < 4:
                         bi = (1, 2, 2, 1)[k]
-                frame = bases[(int(states[i]), bi)].resize(
+                frame = bases[(shapes[i], bi)].resize(
                     (W, H), Image.BILINEAR, box=(x0, y0, x0 + cw, y0 + ch)
                 )
                 p.stdin.write(frame.tobytes())

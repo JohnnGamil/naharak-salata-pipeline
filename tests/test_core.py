@@ -744,3 +744,17 @@ def test_ffmpeg_found_on_windows_without_path(monkeypatch):
     u._ensure_ffmpeg_on_path()
     import shutil
     assert shutil.which("ffmpeg")
+
+
+def test_visemes_follow_letters():
+    import numpy as np
+    from src.video import visemes
+    tl = visemes.timeline([{"text": "ماما", "start": 0.0, "end": 1.0}])
+    assert [s for _, _, s in tl] == ["M", "A", "M", "A"]
+    assert visemes.letter_shape("و") == "O" and visemes.letter_shape("ف") == "F"
+    rms = np.full(30, 0.5)
+    rms[:3] = 0.0
+    sh = visemes.frame_shapes(tl, rms, 30)
+    assert sh[0] == "X" and "M" in sh and "A" in sh  # silence shut, lips close on م
+    long = visemes.frame_shapes([(0.0, 1.0, "M")], np.full(30, 0.6), 30)
+    assert long[:3] == ["M"] * 3 and set(long[3:]) == {"B"}  # no long mute closed mouth

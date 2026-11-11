@@ -31,8 +31,8 @@ def _ring_color(im: Image.Image, box, below: bool = True) -> tuple[int, int, int
     return tuple(int(v) for v in np.median(np.concatenate(parts), axis=0))
 
 
-def draw_mouth(im: Image.Image, box, level: float, emotion: str, skin) -> Image.Image:
-    """Erase the drawn mouth and paint one whose shape follows the emotion."""
+def _erase(im: Image.Image, box, skin):
+    """Paint the picture's own mouth over with the skin around it; (image, centre x, centre y, width)."""
     im = im.copy()
     x0, y0, x1, y1 = box
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
@@ -45,6 +45,51 @@ def draw_mouth(im: Image.Image, box, level: float, emotion: str, skin) -> Image.
     patch = Image.new("RGBA", im.size, (*skin, 255))
     im.paste(patch, (0, 0), mask.filter(ImageFilter.GaussianBlur(mw * 0.08)))
     im.putalpha(alpha)  # never paint outside the character's silhouette
+    return im, cx, cy, mw
+
+
+SHAPE_LEVEL = {"X": 0.0, "B": 0.35, "A": 0.7, "A2": 1.0}
+INSIDE, TEETH, TONGUE = (70, 15, 20), (250, 250, 245), (225, 90, 100)
+
+
+def draw_shape(im: Image.Image, box, shape: str, emotion: str, skin) -> Image.Image:
+    """Mouth for one sound (see visemes.py): X/B/A/A2 are the open levels, M/E/O/F their own shapes."""
+    if shape in SHAPE_LEVEL:
+        return draw_mouth(im, box, SHAPE_LEVEL[shape], emotion, skin)
+    im, cx, cy, mw = _erase(im, box, skin)
+    d = ImageDraw.Draw(im)
+    dark = tuple(int(c * 0.3) for c in skin)
+    lip = tuple(min(255, int(c * 0.75)) for c in skin)
+    lw = max(4, int(mw * 0.06))
+    if shape == "M":  # lips pressed together: one thick flat line, a touch fuller in the middle
+        w = mw * 0.30
+        d.rounded_rectangle([cx - w, cy - lw * 0.75, cx + w, cy + lw * 0.75], radius=lw, fill=dark)
+        d.ellipse([cx - w * 0.45, cy - lw * 1.0, cx + w * 0.45, cy + lw * 1.0], fill=dark)
+    elif shape == "E":  # "ee": wide and flat, teeth showing
+        w, h = mw * 0.40, mw * 0.13
+        d.rounded_rectangle([cx - w, cy - h, cx + w, cy + h], radius=h, fill=INSIDE, outline=dark, width=lw)
+        r = max(2, int(h * 0.35))
+        d.rounded_rectangle([cx - w * 0.72, cy - h + lw * 0.8, cx + w * 0.72, cy - lw * 0.2], radius=r, fill=TEETH)
+        d.rounded_rectangle([cx - w * 0.55, cy + lw * 0.4, cx + w * 0.55, cy + h - lw * 0.8], radius=r, fill=TEETH)
+    elif shape == "O":  # "oo": small and round, lips pushed out
+        r = mw * 0.17
+        d.ellipse([cx - r * 1.35, cy - r * 1.35, cx + r * 1.35, cy + r * 1.35], fill=lip, outline=dark, width=lw)
+        d.ellipse([cx - r * 0.8, cy - r * 0.85, cx + r * 0.8, cy + r * 0.85], fill=INSIDE)
+    elif shape == "F":  # "f": upper teeth biting the lower lip
+        w, h = mw * 0.34, mw * 0.12
+        d.rounded_rectangle([cx - w, cy - h, cx + w, cy + h * 0.6], radius=h * 0.6, fill=INSIDE, outline=dark, width=lw)
+        d.rounded_rectangle([cx - w * 0.7, cy - h + lw * 0.8, cx + w * 0.7, cy + h * 0.35],
+                            radius=max(2, int(h * 0.3)), fill=TEETH)
+        d.rounded_rectangle([cx - w * 0.85, cy + h * 0.15, cx + w * 0.85, cy + h * 0.9], radius=h * 0.4,
+                            fill=lip, outline=dark, width=max(2, lw // 2))
+    else:
+        return draw_mouth(im, box, 0.35, emotion, skin)
+    return im
+
+
+def draw_mouth(im: Image.Image, box, level: float, emotion: str, skin) -> Image.Image:
+    """Erase the drawn mouth and paint one whose shape follows the emotion."""
+    im, cx, cy, mw = _erase(im, box, skin)
     d = ImageDraw.Draw(im)
     dark = tuple(int(c * 0.3) for c in skin)
     lw = max(4, int(mw * 0.06))

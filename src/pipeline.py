@@ -109,10 +109,23 @@ class Pipeline:
         imgs = self._read(jd / "images.json")
         audio = self._read(jd / "audio" / "audio.json")
         per_scene = imgs.get("__scenes__") or [imgs[sc.character_id] for sc in story.scenes]
+        words = self._scene_words(jd, story, audio)
         return [SceneSpec(index=i, character_id=sc.character_id, image=Path(per_scene[i]["path"]),
                           meta=per_scene[i]["meta"], audio=Path(a["wav"]), duration=a["duration"],
-                          emotion=sc.emotion, prompt=sc.visual_prompt_en)
+                          emotion=sc.emotion, prompt=sc.visual_prompt_en, extra={"words": words[i]})
                 for i, (sc, a) in enumerate(zip(story.scenes, audio))]
+
+    def _scene_words(self, jd: Path, story, audio: list[dict]) -> list:
+        """Per scene, the words with the times they are heard (mouth shapes); cached, None where unknown."""
+        f = jd / "audio" / "words.json"
+        if f.exists():
+            got = self._read(f)
+            if len(got) == len(audio):
+                return got
+        from .video.visemes import words_for_scene
+        got = [words_for_scene(a["wav"], sc.line_ar, a["duration"], self.s) for sc, a in zip(story.scenes, audio)]
+        self._write(f, got)
+        return got
 
     def _refind_faces(self, jd: Path) -> None:
         """Faces missed while Gemini was busy get another look; still busy -> wait an hour instead of
