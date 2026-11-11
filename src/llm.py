@@ -92,7 +92,8 @@ class LLM:
         """gpt-oss-120b on Workers AI (2026-11-11): a second brain when every Gemini model is down."""
         url = f"https://api.cloudflare.com/client/v4/accounts/{self.s.cloudflare_account_id}/ai/v1/chat/completions"
         body = {"model": self.s.cloudflare_text_model, "messages": [{"role": "user", "content": prompt}],
-                "temperature": temperature, "max_tokens": 4000}
+                "temperature": temperature, "max_tokens": 6000,
+                "reasoning_effort": "low"}  # gpt-oss thinks first: on high it ran out of tokens with no answer
         r = httpx.post(url, json=body, timeout=150, headers={"Authorization": f"Bearer {self.s.cloudflare_api_token}"})
         if r.status_code >= 500 or (r.status_code == 429 and "daily" not in r.text):
             raise RetryableError(f"cloudflare text {r.status_code}")
