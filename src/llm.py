@@ -143,7 +143,17 @@ class LLM:
         if writer:
             if not self.gemini_enabled:
                 raise LLMUnavailable("GEMINI_API_KEY not set")
-            return self._gemini_call(prompt, json_mode, temperature, self.s.gemini_writer_list)
+            try:
+                return self._gemini_call(prompt, json_mode, temperature, self.s.gemini_writer_list)
+            except LLMUnavailable:
+                # 2026-11-11 (John: no more stalls): gpt-oss-120b writes when every Gemini writer is used up;
+                # the editor, check_writing and proofread still judge its script like any other
+                if not (self.s.cloudflare_account_id and self.s.cloudflare_api_token):
+                    raise
+                try:
+                    return self._cloudflare_text(prompt, json_mode, temperature)
+                except Exception as e:
+                    raise LLMUnavailable(f"no writer model available: {e}") from e
         if self.gemini_enabled:
             try:
                 return self._gemini_call(prompt, json_mode, temperature)
