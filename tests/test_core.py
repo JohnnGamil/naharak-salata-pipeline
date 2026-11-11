@@ -758,3 +758,22 @@ def test_visemes_follow_letters():
     assert sh[0] == "X" and "M" in sh and "A" in sh  # silence shut, lips close on م
     long = visemes.frame_shapes([(0.0, 1.0, "M")], np.full(30, 0.6), 30)
     assert long[:3] == ["M"] * 3 and set(long[3:]) == {"B"}  # no long mute closed mouth
+
+
+def test_tilted_face_keeps_its_own_mouth(monkeypatch):
+    """Video 44 (2026-11-11): a sleeping potato with its head tilted got a 2nd mouth drawn on its cheek."""
+    from src.images.pollinations import ImageGen
+    g = ImageGen.__new__(ImageGen)
+    g.llm = None
+    eyes = [[0.355, 0.351, 0.461, 0.384], [0.505, 0.326, 0.587, 0.362]]
+    real = [0.52, 0.52, 0.62, 0.56]
+    monkeypatch.setattr(g, "locate_face", lambda img: {"mouth": real, "eyes": eyes}, raising=False)
+    monkeypatch.setattr("src.images.pollinations.Image.open", lambda p: None)
+    m = g.locate_mouth(Path("x.jpg"))
+    assert m["mouth"] == real and not m.get("mouth_from_eyes")
+    # the speck case still gets a mouth under the eyes, and the speck is painted over
+    eyes2 = [[0.37, 0.33, 0.51, 0.40], [0.55, 0.28, 0.68, 0.34]]
+    monkeypatch.setattr(g, "locate_face", lambda img: {"mouth": [0.79, 0.55, 0.83, 0.58], "eyes": eyes2},
+                        raising=False)
+    m = g.locate_mouth(Path("x.jpg"))
+    assert m.get("mouth_from_eyes") and m["erase_box"] == [0.79, 0.55, 0.83, 0.58]

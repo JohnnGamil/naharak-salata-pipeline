@@ -134,10 +134,18 @@ class ImageGen:
             ey1 = max(e[3] for e in eyes)
             cx, span = (ex0 + ex1) / 2, ex1 - ex0
             mx = (x0 + x1) / 2
-            if abs(mx - cx) > span * 0.45 or y0 < ey1 or (x1 - x0) < span * 0.15:
+            # 2026-11-11: a tilted sleeping potato's real mouth sat off to the side (0.45 span away) and got
+            # a second mouth drawn on its cheek, so only a box that cannot be a mouth is replaced: above the
+            # eyes, far to the side, far below, or a speck
+            no_box = face["mouth"] is None
+            if (no_box or abs(mx - cx) > span * 0.75 or y0 < ey1 - span * 0.05 or y0 - ey1 > span * 2.2
+                    or (x1 - x0) < span * 0.15):
                 w, top = max(0.08, span * 0.45), min(0.9, ey1 + span * 0.35)
-                x0, x1, y0, y1 = cx - w / 2, cx + w / 2, top, top + w * 0.35
-                return {**meta, "mouth": [x0, y0, x1, y1], "face_found": True, "mouth_from_eyes": True}
+                drawn = [cx - w / 2, top, cx + w / 2, top + w * 0.35]
+                out = {**meta, "mouth": drawn, "face_found": True, "mouth_from_eyes": True}
+                if not no_box and (x1 - x0) < 0.4:  # whatever Gemini saw there gets painted over too
+                    out["erase_box"] = [x0, y0, x1, y1]
+                return out
         if x1 - x0 > 0.6:
             return {**meta, "mouth": [0.42, 0.50, 0.58, 0.56], "guessed": True}
         if y1 - y0 < 0.02:  # very thin boxes (closed lips) -> give the animated mouth some room

@@ -25,9 +25,11 @@ Score each criterion 0-10 (10 = perfect):
 - character_visible: a clear cartoon fruit/vegetable character is visible and in frame
 - matches_scene: frames fit the characters/scenes described
 - appropriate: family friendly, nothing violent/sexual/disturbing/offensive
+- mouth: 10 = every speaking face has exactly ONE mouth, where a mouth belongs (under the eyes, on the
+  face); 0 = a face shows two mouths, or a mouth drawn on a cheek, the forehead, an eye or off the face
 - overall: would a viewer find this watchable and appealing
 Return ONLY JSON: {{"deformities": n, "character_visible": n, "matches_scene": n, "appropriate": n,
-"overall": n, "problems": ["short notes"]}}"""
+"mouth": n, "overall": n, "problems": ["short notes"]}}"""
 
 
 def sample_frames(path: Path, n: int = 6, width: int = 480) -> list[bytes]:
@@ -57,7 +59,7 @@ FALLBACK_NOTE = ("This video is a simple 2D animation of still character picture
 
 
 def check(path: Path, story, llm, min_score: float, require: bool, engine: str = "kaggle") -> dict:
-    frames = sample_frames(path)
+    frames = sample_frames(path, n=max(6, len(story.scenes) + 1))  # every scene seen (its mouth is checked)
     if not frames:
         return {"passed": False, "problems": ["could not sample frames"]}
     chars = "; ".join(f"{c.id} ({c.look})" for c in story.characters)
@@ -75,8 +77,12 @@ def check(path: Path, story, llm, min_score: float, require: bool, engine: str =
         res = res[0] if res else {}
     keys = ("deformities", "character_visible", "matches_scene", "appropriate", "overall")
     scores = {k: float(res.get(k, 0)) for k in keys}
+    scores["mouth"] = float(res.get("mouth", 10))
     problems = list(res.get("problems") or [])
     passed = scores["overall"] >= min_score and scores["appropriate"] >= 7 and scores["character_visible"] >= 5
+    if scores["mouth"] < 6:  # 2026-11-11 video 44: a second mouth on a cheek went out
+        passed = False
+        problems.append(f"mouth misplaced (score {scores['mouth']:.0f})")
     if not passed:
         problems.insert(0, f"visual scores {scores}")
     return {"passed": passed, "scores": scores, "problems": problems}

@@ -144,6 +144,9 @@ class FallbackEngine(VideoEngine):
                 mouths[sh] = draw_mouth(base, box, ROUGH_LEVEL[sh], skin, erase=False)
             else:  # erase the picture's mouth, draw the one for this sound (shaped by the emotion)
                 rgba = base.convert("RGBA")
+                if spec.meta.get("erase_box"):  # a mouth-like mark away from where the mouth is drawn
+                    eb = cover_box(src.width, src.height, spec.meta["erase_box"], BW, BH)
+                    rgba = face._erase(rgba, eb, face._ring_color(rgba, eb))[0]
                 mouths[sh] = face.draw_shape(rgba, box, sh, spec.emotion, face._ring_color(rgba, box)).convert("RGB")
         out = {}
         for sh, m in mouths.items():
