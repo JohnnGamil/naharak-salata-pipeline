@@ -777,3 +777,20 @@ def test_tilted_face_keeps_its_own_mouth(monkeypatch):
                         raising=False)
     m = g.locate_mouth(Path("x.jpg"))
     assert m.get("mouth_from_eyes") and m["erase_box"] == [0.79, 0.55, 0.83, 0.58]
+
+
+def test_tidy_drops_silent_cast_and_weak_writer_gate():
+    from src.ideas.generator import tidy
+    d = {"characters": [{"id": "a"}, {"id": "b"}, {"id": "c"}], "scenes": [{"character_id": "a"}, {"character_id": "b"}]}
+    assert [c["id"] for c in tidy(d)["characters"]] == ["a", "b"]
+    from src.config import get_settings
+    from src.llm import LLM, LLMUnavailable
+    s = get_settings().model_copy(update={"gemini_api_key": "", "groq_api_key": "x", "cloudflare_api_token": ""})
+    llm = LLM(s)
+    called = []
+    llm._groq_text = lambda *a, **k: called.append(1) or "{}"
+    with pytest.raises(LLMUnavailable):
+        llm.text("p", writer=True)  # queue not empty: no weak writer
+    assert not called
+    llm.weak_writer_ok = True
+    assert llm.text("p", writer=True) == "{}" and called

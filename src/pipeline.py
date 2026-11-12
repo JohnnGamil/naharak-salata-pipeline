@@ -78,7 +78,12 @@ class Pipeline:
 
     # --- stages ----------------------------------------------------------------
     def stage_idea(self, job_id: int) -> None:
-        story = self.ideas.generate()
+        # Gemini writes; the free backups (weaker Arabic) only when nothing finished is waiting to post
+        self.llm.weak_writer_ok = not self.db.ready_jobs()
+        try:
+            story = self.ideas.generate()
+        finally:
+            self.llm.weak_writer_ok = False
         self._write(self.job_dir(job_id) / "story.json", story.model_dump())
         self.db.set_status(job_id, "IDEA", title=story.title, format=story.format,
                            story_json=story.model_dump_json())

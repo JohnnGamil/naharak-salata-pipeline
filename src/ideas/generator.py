@@ -210,6 +210,17 @@ SERIES_GENRES = [
 ]
 
 
+def tidy(data):
+    """A cast member with no line is dropped (gpt-oss on Groq, 2026-11-12, kept listing a 5th character
+    who never spoke, and the cast limit threw the whole script away)."""
+    if isinstance(data, dict) and isinstance(data.get("characters"), list) and isinstance(data.get("scenes"), list):
+        used = {sc.get("character_id") for sc in data["scenes"] if isinstance(sc, dict)}
+        kept = [c for c in data["characters"] if not isinstance(c, dict) or c.get("id") in used]
+        if kept:
+            data = {**data, "characters": kept}
+    return data
+
+
 def season_hint(today: dt.date | None = None) -> str:
     """What Egyptians are living through this month (topical ideas travel further)."""
     d = today or dt.date.today()
@@ -385,7 +396,7 @@ class IdeaGenerator:
                 stories = []
                 for k, part in enumerate(parts, 1):
                     try:
-                        stories.append(self._apply_library(check_writing(Story.model_validate(part))))
+                        stories.append(self._apply_library(check_writing(Story.model_validate(tidy(part)))))
                     except ValidationError as e:
                         raise ValueError(f"part {k}: {e}") from e
                 stories[0] = sharpen(self.llm, stories[0], loop=False)
@@ -412,7 +423,7 @@ class IdeaGenerator:
         for attempt in range(1, self.max_attempts + 1):
             try:
                 raw = self.llm.text(prompt + feedback, json_mode=True, temperature=1.0, writer=True)
-                story = check_writing(Story.model_validate(extract_json(raw)))
+                story = check_writing(Story.model_validate(tidy(extract_json(raw))))
                 if story.title in recent:
                     raise ValueError("title repeats a recent video")
                 if self._debut is not None and sum(sc.character_id == self._debut.id for sc in story.scenes) < 3:

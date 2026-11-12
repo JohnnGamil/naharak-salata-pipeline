@@ -91,8 +91,10 @@ class LLM:
         """Groq (2026-11-12, free 1000 requests/day per model): gpt-oss-120b writes, qwen3.8 sees pictures.
         The free tier allows 8000 tokens a minute INCLUDING the answer room asked for, so the answer room
         shrinks to fit a long prompt, and a per-minute refusal waits for the minute instead of giving up."""
-        size = len(content) if isinstance(content, str) else sum(len(str(c.get("text", ""))) for c in content) + 1500
-        room = max(800, min(max_tokens, 7600 - size // 2))  # Arabic: ~2 characters a token
+        text_in = content if isinstance(content, str) else " ".join(str(c.get("text", "")) for c in content)
+        ar = sum(1 for ch in text_in if "؀" <= ch <= "ۿ")
+        used = ar // 2 + (len(text_in) - ar) // 4 + (0 if isinstance(content, str) else 1200)  # + a picture
+        room = max(1500, min(max_tokens, 7700 - int(used * 1.1)))
         body = {"model": model, "messages": [{"role": "user", "content": content}],
                 "temperature": temperature, "max_tokens": room}
         if json_mode:
@@ -200,15 +202,17 @@ class LLM:
 
     def text(self, prompt: str, json_mode: bool = True, temperature: float = 1.0, writer: bool = False) -> str:
         """Gemini first, then Groq, then Cloudflare (2026-11-12, John: "never stop because Gemini is down").
-        writer=True: creative writing, strong models only (no lite Gemini, no Pollinations); the editor,
-        check_writing and proofread still judge whatever any of them wrote."""
+        writer=True: creative writing by Gemini's strong models only. Groq/Cloudflare scripts pass the checks but
+        read weak (2026-11-12 test: "دخل بيت التحقيق وهو سايق أوي"), so they write only when weak_writer_ok is
+        set: the pipeline sets it when no finished video is waiting (a weaker video beats an empty slot)."""
         tries = []
+        weak_ok = not writer or getattr(self, "weak_writer_ok", False)
         if self.gemini_enabled:
             tries.append(("gemini", lambda: self._gemini_call(prompt, json_mode, temperature,
                                                               self.s.gemini_writer_list if writer else None)))
-        if self.s.groq_api_key:
+        if self.s.groq_api_key and weak_ok:
             tries.append(("groq", lambda: self._groq_text(prompt, json_mode, temperature)))
-        if self.s.cloudflare_account_id and self.s.cloudflare_api_token:
+        if self.s.cloudflare_account_id and self.s.cloudflare_api_token and weak_ok:
             tries.append(("cloudflare", lambda: self._cloudflare_text(prompt, json_mode, temperature)))
         if not writer:
             tries.append(("pollinations", lambda: self._pollinations_text(prompt, json_mode, temperature)))
