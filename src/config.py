@@ -34,6 +34,9 @@ class Settings(BaseSettings):
                               "gemini-3.8-flash-tts:Leda,gemini-3.8-flash-lite-tts:Leda")
     cloudflare_account_id: str = ""  # Workers AI free daily allowance (FLUX schnell, ~2 s a picture)
     cloudflare_api_token: str = ""
+    groq_api_key: str = ""  # console.groq.com free tier (1000 requests/day per model)
+    groq_text_models: str = "openai/gpt-oss-120b,qwen/qwen3.8-27b"
+    groq_vision_model: str = "qwen/qwen3.8-27b"
     cloudflare_text_model: str = "@cf/openai/gpt-oss-120b"
     cloudflare_image_model: str = "@cf/black-forest-labs/flux-1-schnell"
     # AI Horde: volunteer GPUs, no sign-up ("0000000000" = anonymous, lowest queue priority)
@@ -122,6 +125,10 @@ class Settings(BaseSettings):
     @property
     def models_dir(self) -> Path:
         return self.data_dir / "models"
+
+    @property
+    def groq_text_list(self) -> list[str]:
+        return [m.strip() for m in self.groq_text_models.split(",") if m.strip()]
 
     @property
     def gemini_model_list(self) -> list[str]:

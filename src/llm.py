@@ -87,6 +87,42 @@ class LLM:
                 log.warning("gemini %s failed: %s", model, msg[:300])
         raise LLMUnavailable(f"all Gemini models failed: {last}")
 
+    @net_retry(attempts=3, max_wait=30)
+    def groq_chat(self, content, json_mode: bool, temperature: float, model: str, max_tokens: int = 6000) -> str:
+        """Groq (2026-11-12, free 1000 requests/day per model): gpt-oss-120b writes, qwen3.8 sees pictures."""
+        body = {"model": model, "messages": [{"role": "user", "content": content}],
+                "temperature": temperature, "max_tokens": max_tokens}
+        if json_mode:
+            body["response_format"] = {"type": "json_object"}
+        if "gpt-oss" in model:
+            body["reasoning_effort"] = "low"
+        r = httpx.post("https://api.groq.com/openai/v1/chat/completions", json=body, timeout=150,
+                       headers={"Authorization": f"Bearer {self.s.groq_api_key}"})
+        if r.status_code >= 500 or (r.status_code == 429 and "per day" not in r.text):
+            raise RetryableError(f"groq {r.status_code}")  # per-minute limit: wait a moment
+        if r.status_code >= 400:
+            raise LLMUnavailable(f"groq {model} {r.status_code}: {r.text[:200]}")
+        text = (r.json()["choices"][0]["message"].get("content") or "").strip()
+        if not text:
+            raise RetryableError("groq returned nothing")
+        if json_mode:
+            extract_json(text)
+        return text
+
+    def _groq_text(self, prompt: str, json_mode: bool, temperature: float) -> str:
+        last = None
+        for m in self.s.groq_text_list:
+            if self._cooldown.get("groq:" + m, 0) > time.time():
+                continue
+            try:
+                return self.groq_chat(prompt, json_mode, temperature, m)
+            except Exception as e:  # noqa: BLE001
+                last = e
+                if "per day" in str(e) or "429" in str(e):
+                    self._cooldown["groq:" + m] = time.time() + 3600
+                log.warning("groq %s failed: %s", m, str(e)[:200])
+        raise LLMUnavailable(f"groq failed: {last}")
+
     @net_retry(attempts=2)
     def _cloudflare_text(self, prompt: str, json_mode: bool, temperature: float) -> str:
         """gpt-oss-120b on Workers AI (2026-11-11): a second brain when every Gemini model is down."""
@@ -139,36 +175,27 @@ class LLM:
         return text
 
     def text(self, prompt: str, json_mode: bool = True, temperature: float = 1.0, writer: bool = False) -> str:
-        """writer=True: creative writing, strong models only (no lite model, no Pollinations) - raises
-        LLMUnavailable when they are all busy, so the caller waits instead of writing a weak script."""
-        if writer:
-            if not self.gemini_enabled:
-                raise LLMUnavailable("GEMINI_API_KEY not set")
-            try:
-                return self._gemini_call(prompt, json_mode, temperature, self.s.gemini_writer_list)
-            except LLMUnavailable:
-                # 2026-11-11 (John: no more stalls): gpt-oss-120b writes when every Gemini writer is used up;
-                # the editor, check_writing and proofread still judge its script like any other
-                if not (self.s.cloudflare_account_id and self.s.cloudflare_api_token):
-                    raise
-                try:
-                    return self._cloudflare_text(prompt, json_mode, temperature)
-                except Exception as e:
-                    raise LLMUnavailable(f"no writer model available: {e}") from e
+        """Gemini first, then Groq, then Cloudflare (2026-11-12, John: "never stop because Gemini is down").
+        writer=True: creative writing, strong models only (no lite Gemini, no Pollinations); the editor,
+        check_writing and proofread still judge whatever any of them wrote."""
+        tries = []
         if self.gemini_enabled:
-            try:
-                return self._gemini_call(prompt, json_mode, temperature)
-            except LLMUnavailable as e:
-                log.warning("Gemini down, trying Cloudflare text: %s", str(e)[:150])
+            tries.append(("gemini", lambda: self._gemini_call(prompt, json_mode, temperature,
+                                                              self.s.gemini_writer_list if writer else None)))
+        if self.s.groq_api_key:
+            tries.append(("groq", lambda: self._groq_text(prompt, json_mode, temperature)))
         if self.s.cloudflare_account_id and self.s.cloudflare_api_token:
+            tries.append(("cloudflare", lambda: self._cloudflare_text(prompt, json_mode, temperature)))
+        if not writer:
+            tries.append(("pollinations", lambda: self._pollinations_text(prompt, json_mode, temperature)))
+        errors = []
+        for name, call in tries:
             try:
-                return self._cloudflare_text(prompt, json_mode, temperature)
-            except Exception as e:
-                log.warning("falling back to Pollinations text: %s", str(e)[:150])
-        try:
-            return self._pollinations_text(prompt, json_mode, temperature)
-        except Exception as e:
-            raise LLMUnavailable(f"no text LLM available: {e}") from e
+                return call()
+            except Exception as e:  # noqa: BLE001 - next provider
+                errors.append(f"{name}: {str(e)[:120]}")
+                log.warning("%s text failed, trying the next: %s", name, str(e)[:150])
+        raise LLMUnavailable("no text model available: " + " | ".join(errors))
 
     def vision_json(self, images: list[bytes], prompt: str) -> dict:
         """Gemini vision only (Pollinations' anonymous tier has no reliable vision)."""

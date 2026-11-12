@@ -59,9 +59,11 @@ jobs:
       - name: settings
         env:
           ENV_FILE: ${{ secrets.ENV_FILE }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           printf '%s\n' "$ENV_FILE" > .env
           echo "RUNNER=github" >> .env
+          [ -n "$GROQ_API_KEY" ] && echo "GROQ_API_KEY=$GROQ_API_KEY" >> .env  # free backup brain + face finder
           echo "BUFFER_SIZE=3" >> .env  # keep 3 videos ready (the secret still says 2)
           echo "GEMINI_MODELS=gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.8-flash,gemini-3.7-flash" >> .env  # flash-latest / flash-lite-latest answer 404 since 2026-11-10
           if [ "${{ github.event.inputs.dry }}" = "true" ]; then

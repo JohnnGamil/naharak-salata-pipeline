@@ -5,6 +5,7 @@ Images are cached per character id so recurring characters look the same across 
 """
 from __future__ import annotations
 
+import base64
 import io
 import json
 import logging
@@ -18,6 +19,7 @@ from pathlib import Path
 import httpx
 from PIL import Image, ImageStat
 
+from ..llm import extract_json
 from ..util import RetryableError, net_retry
 from . import procedural
 from ..video.base import QuotaWait
@@ -153,9 +155,57 @@ class ImageGen:
             y0, y1 = cy - 0.015, cy + 0.015
         return {**meta, "mouth": [x0, y0, x1, y1], "face_found": True}
 
+    GROQ_FACE = ("Locate the cartoon character's MOUTH and its two EYES in this picture. Coordinates are "
+                 'normalized 0-1000: x from the left edge, y from the top edge. If no mouth is visible, give '
+                 '"mouth": null. Answer ONLY JSON: {"mouth": {"x0":0,"y0":0,"x1":0,"y1":0}, '
+                 '"eyes": [{"x0":0,"y0":0,"x1":0,"y1":0}, {"x0":0,"y0":0,"x1":0,"y1":0}]}')
+
+    def _groq_face(self, im: Image.Image) -> dict | None:
+        """Qwen 3.8 on Groq (2026-11-12): within ~1-2% of Gemini on square pictures and right on the tall
+        ones where Gemini put a lemon's mouth on its legs; 1000 free looks a day. None -> ask Gemini."""
+        try:
+            rgb = Image.new("RGB", im.size, (255, 255, 255))
+            rgb.paste(im, (0, 0), im if im.mode == "RGBA" else None)
+            w, h = rgb.size
+            s = max(w, h)  # padded to a square: on tall pictures its numbers drifted
+            sq = Image.new("RGB", (s, s), (255, 255, 255))
+            ox, oy = (s - w) // 2, (s - h) // 2
+            sq.paste(rgb, (ox, oy))
+            sq.thumbnail((768, 768))
+            buf = io.BytesIO()
+            sq.save(buf, "JPEG", quality=88)
+            url = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+            raw = self.llm.groq_chat([{"type": "text", "text": self.GROQ_FACE},
+                                      {"type": "image_url", "image_url": {"url": url}}],
+                                     json_mode=True, temperature=0.0, model=self.s.groq_vision_model, max_tokens=500)
+            data = extract_json(raw)
+
+            def box(d):
+                if not isinstance(d, dict):
+                    return None
+                try:
+                    x0, y0, x1, y1 = ((float(d[k]) / 1000 * s - o) / L for k, o, L in
+                                      (("x0", ox, w), ("y0", oy, h), ("x1", ox, w), ("y1", oy, h)))
+                except (KeyError, TypeError, ValueError):
+                    return None
+                ok = 0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1 and (x1 - x0) < 0.7
+                return [x0, y0, x1, y1] if ok else None
+            eyes = [e for e in (box(e) for e in data.get("eyes") or []) if e][:2]
+            mouth = box(data.get("mouth"))
+            if mouth is None and not eyes:
+                return None
+            return {"mouth": mouth, "eyes": eyes, "by": "groq"}
+        except Exception as e:  # noqa: BLE001 - Gemini still gets a look
+            log.warning("groq face detection failed: %s", str(e)[:200])
+            return None
+
     def locate_face(self, im: Image.Image) -> dict:
         """{"mouth": [x0,y0,x1,y1] | None, "eyes": [[x0,y0,x1,y1], ...]} normalized."""
         self.face_error = False
+        if self.llm is not None and getattr(self.s, "groq_api_key", ""):
+            got = self._groq_face(im)
+            if got is not None:
+                return got
         if self.llm is None or not self.llm.gemini_enabled:
             return {"mouth": None, "eyes": []}
         try:
