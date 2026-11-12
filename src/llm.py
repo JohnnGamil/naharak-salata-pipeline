@@ -87,27 +87,51 @@ class LLM:
                 log.warning("gemini %s failed: %s", model, msg[:300])
         raise LLMUnavailable(f"all Gemini models failed: {last}")
 
-    @net_retry(attempts=3, max_wait=30)
-    def groq_chat(self, content, json_mode: bool, temperature: float, model: str, max_tokens: int = 6000) -> str:
-        """Groq (2026-11-12, free 1000 requests/day per model): gpt-oss-120b writes, qwen3.8 sees pictures."""
+    def groq_chat(self, content, json_mode: bool, temperature: float, model: str, max_tokens: int = 4000) -> str:
+        """Groq (2026-11-12, free 1000 requests/day per model): gpt-oss-120b writes, qwen3.8 sees pictures.
+        The free tier allows 8000 tokens a minute INCLUDING the answer room asked for, so the answer room
+        shrinks to fit a long prompt, and a per-minute refusal waits for the minute instead of giving up."""
+        size = len(content) if isinstance(content, str) else sum(len(str(c.get("text", ""))) for c in content) + 1500
+        room = max(800, min(max_tokens, 7600 - size // 2))  # Arabic: ~2 characters a token
         body = {"model": model, "messages": [{"role": "user", "content": content}],
-                "temperature": temperature, "max_tokens": max_tokens}
+                "temperature": temperature, "max_tokens": room}
         if json_mode:
             body["response_format"] = {"type": "json_object"}
         if "gpt-oss" in model:
             body["reasoning_effort"] = "low"
-        r = httpx.post("https://api.groq.com/openai/v1/chat/completions", json=body, timeout=150,
-                       headers={"Authorization": f"Bearer {self.s.groq_api_key}"})
-        if r.status_code >= 500 or (r.status_code == 429 and "per day" not in r.text):
-            raise RetryableError(f"groq {r.status_code}")  # per-minute limit: wait a moment
-        if r.status_code >= 400:
-            raise LLMUnavailable(f"groq {model} {r.status_code}: {r.text[:200]}")
-        text = (r.json()["choices"][0]["message"].get("content") or "").strip()
-        if not text:
-            raise RetryableError("groq returned nothing")
-        if json_mode:
-            extract_json(text)
-        return text
+        last = ""
+        for attempt in range(4):
+            try:
+                r = httpx.post("https://api.groq.com/openai/v1/chat/completions", json=body, timeout=150,
+                               headers={"Authorization": f"Bearer {self.s.groq_api_key}"})
+            except httpx.HTTPError as e:
+                last = str(e)
+                time.sleep(5)
+                continue
+            if r.status_code == 429 and "per day" not in r.text and "TPD" not in r.text:
+                wait = r.headers.get("retry-after") or "20"
+                try:
+                    wait_s = min(65.0, float(wait) + 1)
+                except ValueError:
+                    wait_s = 20.0
+                last = f"groq 429 per minute: {r.text[:150]}"
+                time.sleep(wait_s)
+                continue
+            if r.status_code >= 500:
+                last = f"groq {r.status_code}"
+                time.sleep(5)
+                continue
+            if r.status_code >= 400:
+                raise LLMUnavailable(f"groq {model} {r.status_code}: {r.text[:200]}")
+            text = (r.json()["choices"][0]["message"].get("content") or "").strip()
+            if not text:
+                last = "groq returned nothing"
+                body["max_tokens"] = min(7600, body["max_tokens"] + 1500)
+                continue
+            if json_mode:
+                extract_json(text)
+            return text
+        raise LLMUnavailable(f"groq {model}: {last}")
 
     def _groq_text(self, prompt: str, json_mode: bool, temperature: float) -> str:
         last = None
@@ -118,7 +142,7 @@ class LLM:
                 return self.groq_chat(prompt, json_mode, temperature, m)
             except Exception as e:  # noqa: BLE001
                 last = e
-                if "per day" in str(e) or "429" in str(e):
+                if "per day" in str(e) or "TPD" in str(e):  # only the DAILY allowance rests the model
                     self._cooldown["groq:" + m] = time.time() + 3600
                 log.warning("groq %s failed: %s", m, str(e)[:200])
         raise LLMUnavailable(f"groq failed: {last}")
