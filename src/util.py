@@ -63,11 +63,12 @@ def _ensure_ffmpeg_on_path() -> None:
     every night job failed with "The system cannot find the file specified"). Add it when missing."""
     import os
     import shutil
-    if shutil.which("ffmpeg") or sys.platform != "win32":
+    # both are needed: 2026-11-17 the backup rendered fine but every YouTube upload failed on ffprobe
+    if (shutil.which("ffmpeg") and shutil.which("ffprobe")) or sys.platform != "win32":
         return
     base = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet"
-    for exe in [base / "Links" / "ffmpeg.exe", *sorted((base / "Packages").glob("*FFmpeg*/*/bin/ffmpeg.exe"))]:
-        if exe.exists():
+    for exe in [*sorted((base / "Packages").glob("*FFmpeg*/*/bin/ffmpeg.exe")), base / "Links" / "ffmpeg.exe"]:
+        if exe.exists() and (exe.parent / "ffprobe.exe").exists():
             os.environ["PATH"] = str(exe.parent) + os.pathsep + os.environ.get("PATH", "")
             return
 
