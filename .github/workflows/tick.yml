@@ -62,6 +62,12 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           printf '%s\n' "$ENV_FILE" > .env
+          # the repo is public (2026-11-17, free minutes): every value in the settings is masked in the logs,
+          # since GitHub only masks a secret as a whole and ENV_FILE holds many keys
+          while IFS= read -r line; do
+            val="${line#*=}"; val="${val%$'\r'}"
+            if [ "$line" != "$val" ] && [ ${#val} -ge 8 ]; then echo "::add-mask::$val"; fi
+          done < .env
           echo "RUNNER=github" >> .env
           [ -n "$GROQ_API_KEY" ] && echo "GROQ_API_KEY=$GROQ_API_KEY" >> .env  # free backup brain + face finder
           echo "BUFFER_SIZE=3" >> .env  # keep 3 videos ready (the secret still says 2)
